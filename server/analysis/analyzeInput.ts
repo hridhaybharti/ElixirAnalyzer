@@ -13,20 +13,11 @@ import { analyzeRedirects } from "./redirect-analysis";
 import { analyzeMobileThreats } from "./mobile-threats";
 import { reputationService } from "./reputation";
 import { analyzeHomoglyphs } from "./homoglyph";
+import { osintService } from "./osint-engine";
 import {
-  checkIPReputation,
-  checkAbuseIPDB,
-  checkURLReputation,
   lookupWhoisData,
-  lookupIPLocation,
-  lookupVirusTotalDomain,
-  lookupVirusTotalIP,
-  lookupVirusTotalUrl,
   runDetectionEngines,
-  type AbuseIPDBReport,
-  type IPReputation,
-  type IPLocation,
-  type VirusTotalReport,
+  checkURLReputation,
   type WhoisData,
   type DetectionEngineResult,
 } from "./threat-intelligence";
@@ -48,7 +39,7 @@ function preprocess(input: string) {
 }
 
 /**
- * Stage 2: Intelligence Gathering (Parallel)
+ * Stage 2: Intelligence Gathering (Parallel OSINT v2)
  */
 async function gatherIntelligence(type: InputType, target: string) {
   const intel: any = {
@@ -57,6 +48,7 @@ async function gatherIntelligence(type: InputType, target: string) {
     ipLocation: null,
     whoisData: null,
     virusTotal: null,
+    urlScan: null,
     detectionEngines: [],
     urlIntelligence: []
   };
@@ -64,29 +56,27 @@ async function gatherIntelligence(type: InputType, target: string) {
   const tasks: Promise<void>[] = [];
 
   if (type === "ip") {
-    tasks.push(checkIPReputation(target).then(res => { intel.ipReputation = res; }).catch(() => { }));
-    tasks.push(checkAbuseIPDB(target).then(res => { intel.abuseIPDB = res; }).catch(() => { }));
-    tasks.push(lookupVirusTotalIP(target).then(res => { intel.virusTotal = res; }).catch(() => { }));
-    tasks.push(lookupIPLocation(target).then(res => { intel.ipLocation = res; }).catch(() => { }));
-    tasks.push(runDetectionEngines(target).then(res => { intel.detectionEngines = res; }).catch(() => { }));
+    tasks.push(osintService.getAbuseIPDB(target).then(res => { intel.abuseIPDB = res; }));
+    tasks.push(osintService.getVirusTotal(target, "ip").then(res => { intel.virusTotal = res; }));
+    tasks.push(osintService.getIPLocation(target).then(res => { intel.ipLocation = res; }));
+    tasks.push(runDetectionEngines(target).then(res => { intel.detectionEngines = res; }));
   } else if (type === "domain" || type === "url") {
     const hostname = type === "url" ? new URL(target.startsWith('http') ? target : `https://${target}`).hostname : target;
 
-    tasks.push(lookupWhoisData(hostname).then(res => { intel.whoisData = res; }).catch(() => { }));
-    tasks.push(checkURLReputation(hostname).then(res => { intel.urlIntelligence = res; }).catch(() => { }));
-    tasks.push(runDetectionEngines(hostname).then(res => { intel.detectionEngines = res; }).catch(() => { }));
-
-    if (type === "domain") {
-      tasks.push(lookupVirusTotalDomain(hostname).then(res => { intel.virusTotal = res; }).catch(() => { }));
-    } else {
-      tasks.push(lookupVirusTotalUrl(target).then(res => { intel.virusTotal = res; }).catch(() => { }));
+    tasks.push(lookupWhoisData(hostname).then(res => { intel.whoisData = res; }));
+    tasks.push(osintService.getVirusTotal(hostname, type === "url" ? "url" : "domain").then(res => { intel.virusTotal = res; }));
+    tasks.push(checkURLReputation(hostname).then(res => { intel.urlIntelligence = res; }));
+    tasks.push(runDetectionEngines(hostname).then(res => { intel.detectionEngines = res; }));
+    
+    if (type === "url") {
+      tasks.push(osintService.getURLScan(target).then(res => { intel.urlScan = res; }));
     }
   }
 
-  // Wait for all intel tasks with an 8s timeout budget for the whole stage
+  // Optimized timeout: 10s for deep OSINT
   await Promise.race([
     Promise.allSettled(tasks),
-    new Promise(resolve => setTimeout(resolve, 8000))
+    new Promise(resolve => setTimeout(resolve, 10000))
   ]);
 
   return intel;
