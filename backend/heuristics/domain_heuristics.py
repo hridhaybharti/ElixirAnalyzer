@@ -9,20 +9,36 @@ from backend.utils.whois_utils import domain_age_days, domain_age_days_async
 from backend.utils.reputation import reputation_service
 
 
-SUSPICIOUS_TLDS = {
-    "top",
-    "xyz",
-    "tk",
-    "ml",
-    "ga",
-    "cf",
-    "buzz",
-    "rest",
-    "work",
-    "date",
-    "download",
-    "review",
-    "accountant",
+# Granular TLD risk mapping based on global abuse statistics
+TLD_RISK_MAPPING = {
+    # Critical Risk (Commonly associated with malware delivery or massive botnets)
+    "zip": {"impact": 28, "level": "critical"},
+    "mov": {"impact": 28, "level": "critical"},
+    "top": {"impact": 25, "level": "critical"},
+    "tk":  {"impact": 25, "level": "critical"},
+    "ml":  {"impact": 25, "level": "critical"},
+    "ga":  {"impact": 25, "level": "critical"},
+    "cf":  {"impact": 25, "level": "critical"},
+    "gq":  {"impact": 25, "level": "critical"},
+    
+    # High Risk (Low-cost TLDs with high abuse rates)
+    "xyz": {"impact": 18, "level": "high"},
+    "buzz": {"impact": 18, "level": "high"},
+    "rest": {"impact": 18, "level": "high"},
+    "work": {"impact": 18, "level": "high"},
+    "date": {"impact": 18, "level": "high"},
+    "download": {"impact": 18, "level": "high"},
+    "review": {"impact": 18, "level": "high"},
+    "click": {"impact": 15, "level": "high"},
+    "link":  {"impact": 15, "level": "high"},
+    "shop":  {"impact": 12, "level": "high"},
+    
+    # Medium/Suspicious Risk
+    "info": {"impact": 8, "level": "suspicious"},
+    "biz":  {"impact": 8, "level": "suspicious"},
+    "live": {"impact": 8, "level": "suspicious"},
+    "icu":  {"impact": 8, "level": "suspicious"},
+    "wang": {"impact": 10, "level": "suspicious"},
 }
 
 # Small, explainable lists (academic/demo purpose). Extend as needed.
@@ -151,15 +167,17 @@ def _sld(domain: str) -> str:
 
 def suspicious_tld_signal(domain: str) -> Optional[Dict[str, Any]]:
     tld = _tld(domain)
-    if tld in SUSPICIOUS_TLDS:
+    risk = TLD_RISK_MAPPING.get(tld)
+    
+    if risk:
         return {
             "name": "Suspicious TLD",
             "category": "domain",
             "bucket": "structure",
-            "impact": 18,
-            "confidence": 0.8,
-            "description": f"The .{tld} TLD is statistically over-represented in abuse reports.",
-            "evidence": {"tld": tld},
+            "impact": risk["impact"],
+            "confidence": 0.85 if risk["level"] == "critical" else 0.75,
+            "description": f"The .{tld} TLD has a {risk['level']} correlation with abuse and malicious activity.",
+            "evidence": {"tld": tld, "risk_level": risk["level"]},
         }
     return None
 

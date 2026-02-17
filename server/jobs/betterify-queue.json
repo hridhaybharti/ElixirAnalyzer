@@ -1,0 +1,54 @@
+{
+  "current_part": 3,
+  "total_parts": 5,
+  "roadmap": [
+    {
+      "part": 1,
+      "name": "Visual Intelligence Foundation (Playwright Setup)",
+      "status": "completed",
+      "tasks": [
+        "Add Playwright to requirements.txt",
+        "Create backend/utils/screenshot_engine.py placeholder",
+        "Implement basic page capture logic"
+      ]
+    },
+    {
+      "part": 2,
+      "name": "Advanced TLD & Behavioral Weights",
+      "status": "completed",
+      "tasks": [
+        "Update weights.json with granular TLD penalties (.zip, .top, .buzz)",
+        "Refine scoring math for higher precision"
+      ]
+    },
+    {
+      "part": 3,
+      "name": "DOM Behavioral Heuristics",
+      "status": "pending",
+      "tasks": [
+        "Implement Credential Harvester check (forms on non-SSL)",
+        "Implement Tracking Script & iframe detection"
+      ]
+    },
+    {
+      "part": 4,
+      "name": "Collaborative Intel (PDF & Webhooks)",
+      "status": "pending",
+      "tasks": [
+        "Build PDF Report Generator",
+        "Add Slack/Discord Webhook support for high-risk hits"
+      ]
+    },
+    {
+      "part": 5,
+      "name": "Final Optimization & Polish",
+      "status": "pending",
+      "tasks": [
+        "Global error handling audit",
+        "Final cinematic UI refinements",
+        "Merge to Main"
+      ]
+    }
+  ],
+  "last_update": "2026-02-17"
+}
