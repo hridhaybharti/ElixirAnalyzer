@@ -14,6 +14,7 @@ import { analyzeMobileThreats } from "./mobile-threats";
 import { reputationService } from "./reputation";
 import { analyzeHomoglyphs } from "./homoglyph";
 import { osintService } from "./osint-engine";
+import { archiveService } from "./archive-intel";
 import {
   lookupWhoisData,
   runDetectionEngines,
@@ -49,6 +50,7 @@ async function gatherIntelligence(type: InputType, target: string) {
     whoisData: null,
     virusTotal: null,
     urlScan: null,
+    archiveHistory: null,
     detectionEngines: [],
     urlIntelligence: []
   };
@@ -67,6 +69,7 @@ async function gatherIntelligence(type: InputType, target: string) {
     tasks.push(osintService.getVirusTotal(hostname, type === "url" ? "url" : "domain").then(res => { intel.virusTotal = res; }));
     tasks.push(checkURLReputation(hostname).then(res => { intel.urlIntelligence = res; }));
     tasks.push(runDetectionEngines(hostname).then(res => { intel.detectionEngines = res; }));
+    tasks.push(archiveService.getHistory(hostname).then(res => { intel.archiveHistory = res; }));
     
     if (type === "url") {
       tasks.push(osintService.getURLScan(target).then(res => { intel.urlScan = res; }));
@@ -145,6 +148,13 @@ export async function analyzeInput(type: InputType, input: string) {
         score += 35;
         evidence.push({ name: "Very New Domain", status: "fail", description: `Registered ${intel.whoisData.age} days ago`, scoreImpact: 35 });
       }
+    }
+
+    // 🔥 Wayback Machine Archive Analysis
+    const archiveSignal = await archiveService.getMaturitySignal(targetHostname);
+    if (archiveSignal) {
+      evidence.push(archiveSignal);
+      score += archiveSignal.scoreImpact;
     }
   }
 
