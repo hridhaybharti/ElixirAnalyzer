@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   CheckCircle,
   ExternalLink,
+  FileDown,
 } from "lucide-react";
 
 import { format } from "date-fns";
@@ -97,6 +98,17 @@ export default function AnalysisResult() {
               </div>
               <div className="text-xs text-slate-500 uppercase tracking-widest">
                 Verdict
+              </div>
+
+              {/* Export Button */}
+              <div className="pt-4 w-full">
+                <Button 
+                  onClick={() => window.open(`/api/analysis/${id}/export`, '_blank')}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-white/5 gap-2"
+                >
+                  <FileDown className="w-4 h-4" />
+                  Export Intelligence Report
+                </Button>
               </div>
             </CardHeader>
 

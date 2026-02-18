@@ -9,6 +9,8 @@ import { api } from "@shared/routes";
 import { analyzeInput } from "./analysis/analyzeInput";
 import { reputationService } from "./analysis/reputation";
 import { secretsManager } from "./utils/secrets";
+import { ThreatReportExporter } from "./utils/exporter";
+import { storage } from "./storage";
 
 /* =========================
    ROUTES (ENGINE-DRIVEN, DB-SAFE)
@@ -126,6 +128,20 @@ export async function registerRoutes(
     }
 
     res.json(analysis);
+  });
+
+  /**
+   * EXPORT PDF REPORT
+   */
+  app.get("/api/analysis/:id/export", async (req, res) => {
+    const id = Number(req.params.id);
+    const analysis = await storage.getAnalysis(id);
+    if (!analysis) return res.status(404).json({ message: "Not found" });
+
+    const pdfBuffer = ThreatReportExporter.generatePDF(analysis);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=Elixir_Report_${id}.pdf`);
+    res.send(pdfBuffer);
   });
 
   return httpServer;

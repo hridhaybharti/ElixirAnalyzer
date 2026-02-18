@@ -16,6 +16,7 @@ import { analyzeHomoglyphs } from "./homoglyph";
 import { osintService } from "./osint-engine";
 import { archiveService } from "./archive-intel";
 import { visualEngine } from "./visual-engine";
+import { webhookService } from "../utils/webhooks";
 import {
   lookupWhoisData,
   runDetectionEngines,
@@ -195,7 +196,7 @@ export async function analyzeInput(type: InputType, input: string) {
 
   const confidence = Math.round((finalEvidence.filter(e => e.status !== "pass").length / Math.max(finalEvidence.length, 1)) * 100);
 
-  return {
+  const resultObj = {
     riskScore: score,
     riskLevel,
     confidence,
@@ -216,4 +217,22 @@ export async function analyzeInput(type: InputType, input: string) {
     },
     summary: `Analysis complete. Verdict: ${riskLevel}`
   };
+
+  // 🔥 Trigger Webhook for High Risk Threats (Background)
+  // We mock a temporary analysis object for the webhook
+  if (score >= 70) {
+    webhookService.notifyHighRisk({ 
+      id: 0, 
+      input, 
+      type, 
+      riskScore: score, 
+      riskLevel, 
+      summary: resultObj.summary, 
+      details: resultObj.details as any, 
+      createdAt: new Date(), 
+      isFavorite: false 
+    }).catch(() => {});
+  }
+
+  return resultObj;
 }
