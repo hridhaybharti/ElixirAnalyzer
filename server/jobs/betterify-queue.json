@@ -1,5 +1,5 @@
 {
-  "current_part": 3,
+  "current_part": 4,
   "total_parts": 5,
   "roadmap": [
     {
@@ -24,7 +24,7 @@
     {
       "part": 3,
       "name": "DOM Behavioral Heuristics",
-      "status": "pending",
+      "status": "completed",
       "tasks": [
         "Implement Credential Harvester check (forms on non-SSL)",
         "Implement Tracking Script & iframe detection"

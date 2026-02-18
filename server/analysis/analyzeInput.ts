@@ -15,6 +15,7 @@ import { reputationService } from "./reputation";
 import { analyzeHomoglyphs } from "./homoglyph";
 import { osintService } from "./osint-engine";
 import { archiveService } from "./archive-intel";
+import { visualEngine } from "./visual-engine";
 import {
   lookupWhoisData,
   runDetectionEngines,
@@ -51,6 +52,7 @@ async function gatherIntelligence(type: InputType, target: string) {
     virusTotal: null,
     urlScan: null,
     archiveHistory: null,
+    visualCapture: null,
     detectionEngines: [],
     urlIntelligence: []
   };
@@ -73,6 +75,9 @@ async function gatherIntelligence(type: InputType, target: string) {
     
     if (type === "url") {
       tasks.push(osintService.getURLScan(target).then(res => { intel.urlScan = res; }));
+      // Background visual capture (best effort)
+      const captureId = Buffer.from(target).toString('hex').substring(0, 12);
+      tasks.push(visualEngine.captureSafeScreenshot(target, captureId).then(res => { intel.visualCapture = res; }));
     }
   }
 
@@ -155,6 +160,15 @@ export async function analyzeInput(type: InputType, input: string) {
     if (archiveSignal) {
       evidence.push(archiveSignal);
       score += archiveSignal.scoreImpact;
+    }
+
+    // 🔥 Visual Behavior Heuristics
+    if (type === "url" && intel.visualCapture) {
+      const visualSignals = visualEngine.getVisualHeuristics(intel.visualCapture);
+      for (const signal of visualSignals) {
+        evidence.push(signal);
+        score += signal.scoreImpact;
+      }
     }
   }
 
