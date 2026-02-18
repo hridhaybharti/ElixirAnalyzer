@@ -1,32 +1,46 @@
-# Threat Analyzer
+# Elixir Analyzer 🦞
 
-Threat intelligence and heuristic risk scoring for domains, URLs, and IPs. This repo contains two implementations:
+Premium threat intelligence and heuristic risk scoring for domains, URLs, and IPs.
 
-- Primary stack: Node/Express API in `server/` with a React UI in `client/`.
-- Legacy stack: Python FastAPI API in `backend/` with compatibility shims in `engine/`.
+## 🚀 Real-World Production Setup
 
-## Quick Start (Node + React)
+Elixir Analyzer is now production-hardened with security headers, rate limiting, and a parallel pipeline architecture.
 
-1. Install dependencies:
-   - `npm install`
-2. Configure environment:
-   - Copy `\.env.txt` to `\.env`
-   - Set `DATABASE_URL`, `VIRUSTOTAL_API_KEY`, `ABUSEIPDB_API_KEY`, and `PORT`
-3. Apply database schema:
-   - `npm run db:push`
-4. Run dev server:
-   - `npm run dev`
+### **1. Environment Provisioning**
+Copy the example environment file and fill in your production keys:
+```bash
+cp .env.example .env
+```
 
-The app will be available at `http://localhost:5000`.
+### **2. Automated Setup & Build**
+Run the production initialization script to install dependencies (including headless browser binaries) and build the project:
+```bash
+npm run prod:setup
+npm run prod:build
+```
 
-## Quick Start (Python Legacy)
+### **3. Launching the Engine**
+Start the high-performance production server:
+```bash
+npm run prod:start
+```
 
-1. `python -m venv .venv`
-2. `.\.venv\Scripts\Activate.ps1`
-3. `pip install -r requirements.txt`
-4. `uvicorn backend.main:app --reload`
+### **🐳 Docker Deployment (Recommended)**
+For a seamless, isolated environment, use the provided Dockerfile:
+```bash
+docker build -t elixir-analyzer .
+docker run -p 5000:5000 --env-file .env elixir-analyzer
+```
 
-The Python API will be available at `http://127.0.0.1:8000`.
+---
+
+## 🦾 Features & Heuristics
+- **Parallel OSINT Pipeline:** Concurrent lookups via VirusTotal, AbuseIPDB, and urlscan.io.
+- **Visual Intelligence:** Headless browser capture and Credential Harvester detection.
+- **Authority Reputation:** Automated sync with Tranco Top 100K list.
+- **Archive Insight:** Domain maturity analysis via the Wayback Machine.
+- **Homoglyph Shield:** Visual similarity detection for protected brands.
+- **Reliable Persistence:** SQLite WAL mode with atomic transactions.
 
 ## API Endpoints (Node)
 

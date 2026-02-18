@@ -5,8 +5,25 @@ import { serveStatic } from "./static";
 import { setupVite } from "./vite";
 import { createServer } from "http";
 import { reputationService } from "./analysis/reputation";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 const app = express();
+
+// Production Security Hardening
+app.use(helmet({
+  contentSecurityPolicy: false, // Disabled for dev convenience with local resources
+}));
+
+// API Rate Limiting (Prevent Spam)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { message: "Too many requests from this IP, please try again after 15 minutes" }
+});
+
+app.use("/api/", limiter);
+
 const httpServer = createServer(app);
 
 // Extend IncomingMessage to store raw body
