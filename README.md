@@ -1,101 +1,63 @@
 # Elixir Analyzer 🦞
 
-Premium threat intelligence and heuristic risk scoring for domains, URLs, and IPs.
+**Premium Threat Intelligence & Structural Analysis Engine**
 
-## 🚀 Real-World Production Setup
+Elixir Analyzer is a professional-grade security ecosystem designed to dismantle and evaluate the risk of domains, URLs, and IP addresses. By combining real-time OSINT intelligence, visual behavioral heuristics, and deep structural analysis, it provides high-fidelity risk scores and explainable security verdicts.
 
-Elixir Analyzer is now production-hardened with security headers, rate limiting, and a parallel pipeline architecture.
+## 📡 Intelligence Pillars
+
+- **Parallel OSINT Pipeline:** Concurrent lookups via **VirusTotal (v3)**, **AbuseIPDB**, and **urlscan.io**.
+- **Visual Intelligence:** Safe "Hazmat" browser capture (Playwright) and automated **Credential Harvester** detection.
+- **Global Authority Reputation:** Automated weekly sync with the **Tranco Top 100K** reputable domain list.
+- **Temporal Analysis:** Domain maturity and historical consistency tracking via the **Wayback Machine**.
+- **Identity Protection:** Advanced **Homoglyph (lookalike)** shield and intelligent **Keyboard Typosquatting** classification.
+- **Reliable Data Engine:** High-performance persistence layer using **PostgreSQL (Drizzle)** and **SQLite (WAL mode)**.
+
+## 🚀 Deployment & Production
+
+Elixir is production-hardened with security headers (Helmet), API rate limiting, and a multi-stage pipeline architecture.
 
 ### **1. Environment Provisioning**
-Copy the example environment file and fill in your production keys:
+Configure your intelligence keys:
 ```bash
 cp .env.example .env
 ```
 
 ### **2. Automated Setup & Build**
-Run the production initialization script to install dependencies (including headless browser binaries) and build the project:
+Install dependencies and build the production bundle:
 ```bash
 npm run prod:setup
 npm run prod:build
 ```
 
-### **3. Launching the Engine**
+### **3. Launching the Hub**
 Start the high-performance production server:
 ```bash
 npm run prod:start
 ```
 
-### **🐳 Docker Deployment (Recommended)**
-For a seamless, isolated environment, use the provided Dockerfile:
+### **🐳 Containerization**
+Deploy instantly in any environment using the optimized Docker image:
 ```bash
 docker build -t elixir-analyzer .
 docker run -p 5000:5000 --env-file .env elixir-analyzer
 ```
 
+## 🛠️ Tech Stack
+
+- **Backend:** Node.js, Express, TypeScript (Modular Pipeline Architecture)
+- **Frontend:** React, Vite, TailwindCSS (Premium Cinematic UI)
+- **Database:** PostgreSQL / SQLite (Drizzle ORM)
+- **Investigation:** Playwright (Headless Browser), `tldextract`, `punycode`
+- **Analytics:** Chart.js, Framer Motion
+
+## 📂 Architecture overview
+
+- `server/` Node/Express API and tactical analysis services.
+- `client/` React UI (Dashboard, History, Results).
+- `shared/` Unified Zod schemas and API contracts.
+- `legacy_python_research/` Historical Python FastAPI engine and research shims.
+
 ---
 
-## 🦾 Features & Heuristics
-- **Parallel OSINT Pipeline:** Concurrent lookups via VirusTotal, AbuseIPDB, and urlscan.io.
-- **Visual Intelligence:** Headless browser capture and Credential Harvester detection.
-- **Authority Reputation:** Automated sync with Tranco Top 100K list.
-- **Archive Insight:** Domain maturity analysis via the Wayback Machine.
-- **Homoglyph Shield:** Visual similarity detection for protected brands.
-- **Reliable Persistence:** SQLite WAL mode with atomic transactions.
-
-## API Endpoints (Node)
-
-- `POST /api/analyze`
-  - Body: `{ "type": "domain|ip|url", "input": "..." }`
-  - Note: `value` is also accepted for backward compatibility.
-- `GET /api/history`
-- `DELETE /api/history`
-- `GET /api/analysis/:id`
-- `GET /api/reputation/status`
-
-## API Endpoints (Python Legacy)
-
-- `GET /health`
-- `POST /api/analyze`
-- `GET /api/history`
-- `DELETE /api/history`
-- `GET /api/explain/{analysis_id}`
-- `GET /api/reputation/status`
-
-## Configuration
-
-Node service (`.env`):
-- `PORT`
-- `DATABASE_URL`
-- `VIRUSTOTAL_API_KEY`
-- `ABUSEIPDB_API_KEY`
-
-Python service (optional):
-- `SECURITY_ANALYZER_WEIGHTS=/path/to/weights.json`
-- `SECURITY_ANALYZER_DB_PATH=/path/to/analyzer.sqlite3`
-
-## Repository Layout
-
-- `server/` Node/Express API, analysis pipeline, and database access.
-- `client/` React UI (Vite).
-- `shared/` Shared Zod schemas and API route contracts.
-- `migrations/` Drizzle SQL migrations and snapshots.
-- `script/` Build and smoke-test scripts.
-- `backend/` Python FastAPI API and heuristics engine (legacy).
-- `engine/` Python compatibility shims for legacy imports.
-- `tests/` Python test suite for the legacy backend.
-- `docs/` Architecture notes.
-- `frontend/` Legacy frontend config (not used by current build).
-- `.venv/` and `node_modules/` are local artifacts.
-
-## Workflows
-
-- Build production bundle:
-  - `npm run build`
-- Run production server:
-  - `npm start`
-- Smoke-test Node API:
-  - `node script/test-analyze.js`
-- Run Python analyzer sample:
-  - `python run_analysis.py`
-- Run Python tests:
-  - `pytest`
+Designed and Developed by **Hridhay Bharti**. 🦾
