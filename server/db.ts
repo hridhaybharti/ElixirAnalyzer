@@ -1,15 +1,34 @@
 import "dotenv/config";
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
 import * as schema from "@shared/schema";
 
-const { Pool } = pg;
+export const hasDatabase =
+  !!process.env.DATABASE_URL && process.env.USE_INMEMORY_STORAGE !== "1";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
+let cachedPool: any | null = null;
+let cachedDb: any | null = null;
+
+export async function getDb() {
+  if (!hasDatabase) {
+    throw new Error(
+      "Database is disabled. Set DATABASE_URL (PostgreSQL) or enable in-memory storage with USE_INMEMORY_STORAGE=1.",
+    );
+  }
+
+  if (cachedDb) return cachedDb;
+
+  const [{ drizzle }, pg] = await Promise.all([
+    import("drizzle-orm/node-postgres"),
+    import("pg"),
+  ]);
+
+  const Pool = (pg as any).Pool ?? (pg as any).default?.Pool;
+  if (!Pool) {
+    throw new Error("Failed to load pg Pool");
+  }
+
+  cachedPool = new Pool({ connectionString: process.env.DATABASE_URL });
+  cachedDb = drizzle(cachedPool, { schema });
+
+  return cachedDb;
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle(pool, { schema });

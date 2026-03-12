@@ -3,12 +3,12 @@
 import asyncio
 from typing import Any, Dict, List, Tuple
 
-from backend.core.scorer import score_signals_detailed
-from backend.core.verdict import verdict_for_score
-from backend.heuristics.domain_heuristics import domain_signals, domain_signals_async
-from backend.heuristics.ip_heuristics import ip_signals, ip_signals_async
-from backend.heuristics.url_heuristics import url_signals, url_signals_async
-from backend.utils.validators import is_ip, parse_url_loose
+from ..core.scorer import score_signals_detailed
+from ..core.verdict import verdict_for_score
+from ..heuristics.domain_heuristics import domain_signals, domain_signals_async
+from ..heuristics.ip_heuristics import ip_signals, ip_signals_async
+from ..heuristics.url_heuristics import url_signals, url_signals_async
+from ..utils.validators import is_ip, parse_url_loose
 
 
 def analyze_url_explain(url: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -30,18 +30,23 @@ def analyze_url_explain(url: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     result: Dict[str, Any] = {
         "target": url,
+        "input": url,
         "type": "url",
         "risk_score": risk_score,
         "confidence": confidence,
         "verdict": verdict_for_score(risk_score),
         "signals": signals,
+        "signals_triggered": signals,
         "breakdown": breakdown,
     }
 
     explain = {
         "target": url,
+        "input": url,
         "type": "url",
         "signals": signals,
+        "signals_triggered": signals,
+        "intel_sources": ["url_heuristics", "dns", "whois"],
         "breakdown": breakdown,
         "scoring": scoring_math,
     }
@@ -74,18 +79,23 @@ async def analyze_url_explain_async(url: str) -> Tuple[Dict[str, Any], Dict[str,
 
     result: Dict[str, Any] = {
         "target": url,
+        "input": url,
         "type": "url",
         "risk_score": risk_score,
         "confidence": confidence,
         "verdict": verdict_for_score(risk_score),
         "signals": signals,
+        "signals_triggered": signals,
         "breakdown": breakdown,
     }
 
     explain = {
         "target": url,
+        "input": url,
         "type": "url",
         "signals": signals,
+        "signals_triggered": signals,
+        "intel_sources": ["url_heuristics", "dns", "whois"],
         "breakdown": breakdown,
         "scoring": scoring_math,
     }

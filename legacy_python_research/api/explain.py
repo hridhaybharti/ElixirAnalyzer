@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
-from backend.persistence.sqlite_store import get_explain
+from ..persistence.sqlite_store import get_explain
 
 
 router = APIRouter(tags=["explain"])

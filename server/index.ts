@@ -10,6 +10,18 @@ import rateLimit from "express-rate-limit";
 
 const app = express();
 
+function requireApiKey(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const expected = process.env.API_KEY?.trim();
+  if (!expected) return next();
+
+  if (!req.path.startsWith("/api/")) return next();
+
+  const provided = String(req.header("x-api-key") || "").trim();
+  if (provided && provided === expected) return next();
+
+  return res.status(401).json({ message: "Unauthorized" });
+}
+
 // Production Security Hardening
 app.use(helmet({
   contentSecurityPolicy: false, // Disabled for dev convenience with local resources
@@ -23,6 +35,7 @@ const limiter = rateLimit({
 });
 
 app.use("/api/", limiter);
+app.use(requireApiKey);
 
 const httpServer = createServer(app);
 
@@ -60,22 +73,11 @@ export function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined;
-
-  const originalResJson = res.json.bind(res);
-  res.json = (bodyJson: any) => {
-    capturedJsonResponse = bodyJson;
-    return originalResJson(bodyJson);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-      log(logLine);
+      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
     }
   });
 

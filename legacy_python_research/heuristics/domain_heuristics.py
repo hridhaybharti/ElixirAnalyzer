@@ -4,9 +4,9 @@ import asyncio
 import math
 from typing import Any, Dict, List, Optional
 
-from backend.utils.dns_utils import dns_overview, dns_overview_async
-from backend.utils.whois_utils import domain_age_days, domain_age_days_async
-from backend.utils.reputation import reputation_service
+from ..utils.dns_utils import dns_overview, dns_overview_async
+from ..utils.whois_utils import domain_age_days, domain_age_days_async
+from ..utils.reputation import reputation_service
 
 
 # Granular TLD risk mapping based on global abuse statistics

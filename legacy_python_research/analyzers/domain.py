@@ -2,10 +2,10 @@
 
 from typing import Any, Dict, Tuple
 
-from backend.core.scorer import score_signals_detailed
-from backend.core.verdict import verdict_for_score
-from backend.heuristics.domain_heuristics import domain_signals, domain_signals_async
-from backend.utils.validators import normalize_domain
+from ..core.scorer import score_signals_detailed
+from ..core.verdict import verdict_for_score
+from ..heuristics.domain_heuristics import domain_signals, domain_signals_async
+from ..utils.validators import normalize_domain
 
 
 def analyze_domain_explain(domain: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -16,18 +16,27 @@ def analyze_domain_explain(domain: str) -> Tuple[Dict[str, Any], Dict[str, Any]]
 
     result: Dict[str, Any] = {
         "target": domain,
+        "input": domain,
         "type": "domain",
         "risk_score": risk_score,
         "confidence": confidence,
         "verdict": verdict_for_score(risk_score),
         "signals": signals,
+        # Backward-compatible signal list kept under `signals`.
+        # New field `signals_triggered` provides the same signals for clarity
+        # and to support future UI expectations.
+        "signals_triggered": signals,
         "breakdown": breakdown,
     }
 
     explain = {
         "target": domain,
+        "input": domain,
         "type": "domain",
         "signals": signals,
+        "signals_triggered": signals,
+        # Heuristics currently use DNS and WHOIS lookups; list them for transparency.
+        "intel_sources": ["dns", "whois"],
         "breakdown": breakdown,
         "scoring": scoring_math,
     }

@@ -4,16 +4,19 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development tsx server/index.ts",
-    "build": "tsx script/build.ts",
+    "dev": "cross-env NODE_ENV=development npm run build:server && node dist/index.cjs",
+    "dev:mem": "cross-env NODE_ENV=development USE_INMEMORY_STORAGE=1 PORT=5000 npm run build:server && node dist/index.cjs",
+    "build": "npm run build:server",
+    "build:all": "npm run build:client && npm run build:server",
     "build:client": "vite build",
-    "build:server": "esbuild server/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.cjs --external:dotenv --external:express --external:@replit/vite-plugin-dev-banner --external:@replit/vite-plugin-runtime-error-modal --external:@replit/vite-plugin-cartographer",
-    "start": "NODE_ENV=production node dist/index.cjs",
+    "build:server": "esbuild server/prod.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.cjs --external:dotenv --external:express --external:pg --external:drizzle-orm --external:drizzle-orm/* --external:@replit/vite-plugin-dev-banner --external:@replit/vite-plugin-runtime-error-modal --external:@replit/vite-plugin-cartographer",
+    "start": "cross-env NODE_ENV=production node dist/index.cjs",
+    "start:mem": "cross-env NODE_ENV=production USE_INMEMORY_STORAGE=1 PORT=5000 node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "prod:setup": "npm install && npx playwright install chromium",
-    "prod:build": "npm run build && npm run db:push",
-    "prod:start": "NODE_ENV=production node dist/index.cjs"
+    "prod:build": "npm run build:all && npm run db:push",
+    "prod:start": "cross-env NODE_ENV=production node dist/index.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

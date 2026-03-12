@@ -4,8 +4,8 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Query
 
-from backend.persistence.sqlite_store import clear_history as db_clear_history
-from backend.persistence.sqlite_store import list_history as db_list_history
+from ..persistence.sqlite_store import clear_history as db_clear_history
+from ..persistence.sqlite_store import list_history as db_list_history
 
 
 router = APIRouter(tags=["history"])

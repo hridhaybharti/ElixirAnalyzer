@@ -1,5 +1,5 @@
 import { analyses, type Analysis, type InsertAnalysis } from "@shared/schema";
-import { db } from "./db";
+import { getDb, hasDatabase } from "./db";
 import { desc, eq } from "drizzle-orm";
 
 export interface IStorage {
@@ -17,6 +17,7 @@ export class DatabaseStorage implements IStorage {
   async createAnalysis(
     insertAnalysis: InsertAnalysis
   ): Promise<Analysis> {
+    const db = await getDb();
     const [analysis] = await db
       .insert(analyses)
       .values(insertAnalysis)
@@ -30,6 +31,7 @@ export class DatabaseStorage implements IStorage {
   ========================= */
 
   async getHistory(): Promise<Analysis[]> {
+    const db = await getDb();
     return await db
       .select()
       .from(analyses)
@@ -41,6 +43,7 @@ export class DatabaseStorage implements IStorage {
   ========================= */
 
   async getAnalysis(id: number): Promise<Analysis | undefined> {
+    const db = await getDb();
     const [analysis] = await db
       .select()
       .from(analyses)
@@ -54,8 +57,45 @@ export class DatabaseStorage implements IStorage {
   ========================= */
 
   async clearHistory(): Promise<void> {
+    const db = await getDb();
     await db.delete(analyses);
   }
 }
 
-export const storage = new DatabaseStorage();
+export class InMemoryStorage implements IStorage {
+  private nextId = 1;
+  private analyses: Analysis[] = [];
+
+  async createAnalysis(insertAnalysis: InsertAnalysis): Promise<Analysis> {
+    const analysis: Analysis = {
+      id: this.nextId++,
+      type: insertAnalysis.type,
+      input: insertAnalysis.input,
+      riskScore: insertAnalysis.riskScore,
+      riskLevel: insertAnalysis.riskLevel,
+      summary: insertAnalysis.summary,
+      details: insertAnalysis.details,
+      createdAt: new Date(),
+      isFavorite: insertAnalysis.isFavorite ?? false,
+    };
+
+    this.analyses.unshift(analysis);
+    return analysis;
+  }
+
+  async getHistory(): Promise<Analysis[]> {
+    return [...this.analyses];
+  }
+
+  async getAnalysis(id: number): Promise<Analysis | undefined> {
+    return this.analyses.find((a) => a.id === id);
+  }
+
+  async clearHistory(): Promise<void> {
+    this.analyses = [];
+  }
+}
+
+export const storage: IStorage = hasDatabase
+  ? new DatabaseStorage()
+  : new InMemoryStorage();

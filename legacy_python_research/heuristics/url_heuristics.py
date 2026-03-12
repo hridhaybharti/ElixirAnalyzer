@@ -6,8 +6,8 @@ from typing import Any, Dict, List
 
 import requests
 
-from backend.utils.validators import is_ip, parse_url_loose
-from backend.heuristics.ssl_heuristics import ssl_certificate_signal
+from ..utils.validators import is_ip, parse_url_loose
+from .ssl_heuristics import ssl_certificate_signal
 
 
 SUSPICIOUS_KEYWORDS = {

@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Iterable, List, Tuple
 
-from backend.core.weights import load_weights
+from ..core.weights import load_weights
 
 
 BUCKETS = ("reputation", "structure", "network")

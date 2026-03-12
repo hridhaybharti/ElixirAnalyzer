@@ -2,10 +2,10 @@
 
 from typing import Any, Dict, Tuple
 
-from backend.core.scorer import score_signals_detailed
-from backend.core.verdict import verdict_for_score
-from backend.heuristics.ip_heuristics import ip_signals, ip_signals_async
-from backend.utils.validators import normalize_ip
+from ..core.scorer import score_signals_detailed
+from ..core.verdict import verdict_for_score
+from ..heuristics.ip_heuristics import ip_signals, ip_signals_async
+from ..utils.validators import normalize_ip
 
 
 def analyze_ip_explain(ip: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -16,18 +16,23 @@ def analyze_ip_explain(ip: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     result: Dict[str, Any] = {
         "target": ip,
+        "input": ip,
         "type": "ip",
         "risk_score": risk_score,
         "confidence": confidence,
         "verdict": verdict_for_score(risk_score),
         "signals": signals,
+        "signals_triggered": signals,
         "breakdown": breakdown,
     }
 
     explain = {
         "target": ip,
+        "input": ip,
         "type": "ip",
         "signals": signals,
+        "signals_triggered": signals,
+        "intel_sources": ["ip_heuristics"],
         "breakdown": breakdown,
         "scoring": scoring_math,
     }
@@ -43,18 +48,23 @@ async def analyze_ip_explain_async(ip: str) -> Tuple[Dict[str, Any], Dict[str, A
 
     result: Dict[str, Any] = {
         "target": ip,
+        "input": ip,
         "type": "ip",
         "risk_score": risk_score,
         "confidence": confidence,
         "verdict": verdict_for_score(risk_score),
         "signals": signals,
+        "signals_triggered": signals,
         "breakdown": breakdown,
     }
 
     explain = {
         "target": ip,
+        "input": ip,
         "type": "ip",
         "signals": signals,
+        "signals_triggered": signals,
+        "intel_sources": ["ip_heuristics"],
         "breakdown": breakdown,
         "scoring": scoring_math,
     }

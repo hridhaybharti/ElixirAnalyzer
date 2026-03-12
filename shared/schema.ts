@@ -63,6 +63,24 @@ export const threatIntelligenceSchema = z.object({
     accuracy: z.string().optional(),
     error: z.string().optional(),
   }).nullable().optional(),
+  urlScan: z.unknown().nullable().optional(),
+  archiveHistory: z.object({
+    hasHistory: z.boolean(),
+    firstSeen: z.string().nullable(),
+    url: z.string().optional(),
+    message: z.string().optional(),
+  }).nullable().optional(),
+  visualCapture: z.object({
+    success: z.boolean(),
+    path: z.string().optional(),
+    error: z.string().optional(),
+    visualSignals: z.object({
+      hasPasswordField: z.boolean().optional(),
+      formCount: z.number().optional(),
+      tinyIframeCount: z.number().optional(),
+      trackingScriptCount: z.number().optional(),
+    }).optional(),
+  }).nullable().optional(),
   whoisData: z.object({
     domain: z.string(),
     registrationDate: z.string(),

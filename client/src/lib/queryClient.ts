@@ -1,5 +1,15 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+const apiKey =
+  (import.meta as any).env?.VITE_API_KEY &&
+  String((import.meta as any).env.VITE_API_KEY).trim()
+    ? String((import.meta as any).env.VITE_API_KEY).trim()
+    : null;
+
+function withApiKey(headers: Record<string, string> = {}) {
+  return apiKey ? { ...headers, "x-api-key": apiKey } : headers;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -14,7 +24,7 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: withApiKey(data ? { "Content-Type": "application/json" } : {}),
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -30,6 +40,7 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
+      headers: withApiKey(),
       credentials: "include",
     });
 

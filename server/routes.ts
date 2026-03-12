@@ -10,7 +10,6 @@ import { analyzeInput } from "./analysis/analyzeInput";
 import { reputationService } from "./analysis/reputation";
 import { secretsManager } from "./utils/secrets";
 import { ThreatReportExporter } from "./utils/exporter";
-import { storage } from "./storage";
 
 /* =========================
    ROUTES (ENGINE-DRIVEN, DB-SAFE)
@@ -24,11 +23,13 @@ export async function registerRoutes(
   /**
    * ENGINE STATUS & SECRETS (FOR DASHBOARD)
    */
-  app.get("/api/reputation/status", (_req, res) => {
-    res.json({
-      reputation: reputationService.getStatus(),
-      secrets: secretsManager.getStatus(),
-    });
+  app.get(api.reputation.status.path, (_req, res) => {
+    res.json(
+      api.reputation.status.responses[200].parse({
+        reputation: reputationService.getStatus(),
+        secrets: secretsManager.getStatus(),
+      }),
+    );
   });
 
   /**

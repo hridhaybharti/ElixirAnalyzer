@@ -2,13 +2,22 @@ import { motion } from "framer-motion";
 
 interface RiskGaugeProps {
   score: number;
-  level: string;
+  level?: string;
   confidence?: number;
-  size?: number;
+  size?: number | "sm" | "md" | "lg";
 }
 
 export function RiskGauge({ score, level, confidence = 0, size = 200 }: RiskGaugeProps) {
-  const radius = size * 0.4;
+  const resolvedSize =
+    typeof size === "number"
+      ? size
+      : size === "sm"
+        ? 64
+        : size === "md"
+          ? 160
+          : 220;
+
+  const radius = resolvedSize * 0.4;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (score / 100) * circumference;
 
@@ -24,7 +33,10 @@ export function RiskGauge({ score, level, confidence = 0, size = 200 }: RiskGaug
   }
 
   return (
-    <div className="relative flex flex-col items-center justify-center" style={{ width: size, height: size }}>
+    <div
+      className="relative flex flex-col items-center justify-center"
+      style={{ width: resolvedSize, height: resolvedSize }}
+    >
       {/* Background Circle */}
       <svg className="transform -rotate-90 w-full h-full">
         <circle
@@ -33,8 +45,8 @@ export function RiskGauge({ score, level, confidence = 0, size = 200 }: RiskGaug
           stroke="currentColor"
           fill="transparent"
           r={radius}
-          cx={size / 2}
-          cy={size / 2}
+          cx={resolvedSize / 2}
+          cy={resolvedSize / 2}
         />
         {/* Progress Circle */}
         <motion.circle
@@ -48,8 +60,8 @@ export function RiskGauge({ score, level, confidence = 0, size = 200 }: RiskGaug
           stroke="currentColor"
           fill="transparent"
           r={radius}
-          cx={size / 2}
-          cy={size / 2}
+          cx={resolvedSize / 2}
+          cy={resolvedSize / 2}
         />
       </svg>
       

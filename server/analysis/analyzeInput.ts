@@ -19,6 +19,7 @@ import { visualEngine } from "./visual-engine";
 import { webhookService } from "../utils/webhooks";
 import {
   lookupWhoisData,
+  checkIPReputation,
   runDetectionEngines,
   checkURLReputation,
   type WhoisData,
@@ -55,12 +56,13 @@ async function gatherIntelligence(type: InputType, target: string) {
     archiveHistory: null,
     visualCapture: null,
     detectionEngines: [],
-    urlIntelligence: []
+    urlReputation: [],
   };
 
   const tasks: Promise<void>[] = [];
 
   if (type === "ip") {
+    tasks.push(checkIPReputation(target).then(res => { intel.ipReputation = res; }));
     tasks.push(osintService.getAbuseIPDB(target).then(res => { intel.abuseIPDB = res; }));
     tasks.push(osintService.getVirusTotal(target, "ip").then(res => { intel.virusTotal = res; }));
     tasks.push(osintService.getIPLocation(target).then(res => { intel.ipLocation = res; }));
@@ -70,15 +72,17 @@ async function gatherIntelligence(type: InputType, target: string) {
 
     tasks.push(lookupWhoisData(hostname).then(res => { intel.whoisData = res; }));
     tasks.push(osintService.getVirusTotal(hostname, type === "url" ? "url" : "domain").then(res => { intel.virusTotal = res; }));
-    tasks.push(checkURLReputation(hostname).then(res => { intel.urlIntelligence = res; }));
+    tasks.push(checkURLReputation(hostname).then(res => { intel.urlReputation = res; }));
     tasks.push(runDetectionEngines(hostname).then(res => { intel.detectionEngines = res; }));
     tasks.push(archiveService.getHistory(hostname).then(res => { intel.archiveHistory = res; }));
     
     if (type === "url") {
       tasks.push(osintService.getURLScan(target).then(res => { intel.urlScan = res; }));
-      // Background visual capture (best effort)
-      const captureId = Buffer.from(target).toString('hex').substring(0, 12);
-      tasks.push(visualEngine.captureSafeScreenshot(target, captureId).then(res => { intel.visualCapture = res; }));
+      if (process.env.VISUAL_CAPTURE_ENABLED === "1") {
+        // Background visual capture (best effort)
+        const captureId = Buffer.from(target).toString('hex').substring(0, 12);
+        tasks.push(visualEngine.captureSafeScreenshot(target, captureId).then(res => { intel.visualCapture = res; }));
+      }
     }
   }
 
@@ -150,9 +154,9 @@ export async function analyzeInput(type: InputType, input: string) {
     evidence.push(...domainR.heuristics);
 
     if (intel.whoisData) {
-      if (intel.whoisData.age < 30) {
+      if (intel.whoisData.ageInDays < 30) {
         score += 35;
-        evidence.push({ name: "Very New Domain", status: "fail", description: `Registered ${intel.whoisData.age} days ago`, scoreImpact: 35 });
+        evidence.push({ name: "Very New Domain", status: "fail", description: `Registered ${intel.whoisData.ageInDays} days ago`, scoreImpact: 35 });
       }
     }
 

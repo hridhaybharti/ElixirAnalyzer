@@ -43,6 +43,22 @@ docker build -t elixir-analyzer .
 docker run -p 5000:5000 --env-file .env elixir-analyzer
 ```
 
+## Local quick start (no Postgres)
+
+If you don't have PostgreSQL running locally yet, you can run the API with an in-memory history store:
+
+```bash
+npm.cmd run build:server
+npm.cmd run start:mem
+```
+
+This starts the API on `http://127.0.0.1:5000` and serves a small placeholder page at `/` if the client build is not present.
+
+### Optional security hardening (recommended)
+
+- Set `API_KEY` to require an `x-api-key` header for all `/api/*` endpoints.
+- Set `VISUAL_CAPTURE_ENABLED=1` to enable Playwright screenshots (disabled by default). When enabled, the server blocks non-public IP/hostnames to reduce SSRF risk.
+
 ## 🛠️ Tech Stack
 
 - **Backend:** Node.js, Express, TypeScript (Modular Pipeline Architecture)
@@ -59,5 +75,3 @@ docker run -p 5000:5000 --env-file .env elixir-analyzer
 - `legacy_python_research/` Historical Python FastAPI engine and research shims.
 
 ---
-
-Designed and Developed by **Hridhay Bharti**. 🦾

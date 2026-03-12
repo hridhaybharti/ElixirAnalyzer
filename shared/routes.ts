@@ -60,10 +60,29 @@ export const api = {
       path: '/api/reputation/status',
       responses: {
         200: z.object({
-          loaded: z.boolean(),
-          count: z.number(),
-          last_sync: z.string().nullable(),
-          source: z.string(),
+          reputation: z.object({
+            loaded: z.boolean(),
+            count: z.number(),
+            lastSync: z.string().nullable(),
+            error: z.string().nullable(),
+          }),
+          secrets: z.object({
+            virusTotal: z.object({
+              active: z.boolean(),
+              provider: z.string(),
+              masked: z.string(),
+            }),
+            abuseIPDB: z.object({
+              active: z.boolean(),
+              provider: z.string(),
+              masked: z.string(),
+            }),
+            ipApi: z.object({
+              active: z.boolean(),
+              provider: z.string(),
+              masked: z.string(),
+            }),
+          }),
         }),
       },
     },

@@ -1,4 +1,6 @@
 import axios from "axios";
+import type { HeuristicResult } from "@shared/schema";
+import { TTLCache } from "../utils/ttlCache";
 
 /**
  * Archive Intelligence Service
@@ -7,6 +9,10 @@ import axios from "axios";
  */
 class ArchiveService {
   private static instance: ArchiveService;
+  private cache = new TTLCache<any>({
+    ttlMs: (Number(process.env.ARCHIVE_CACHE_TTL_SECONDS) || 86400) * 1000,
+    maxEntries: Number(process.env.ARCHIVE_CACHE_MAX_ENTRIES) || 2000,
+  });
 
   private constructor() {}
 
@@ -22,26 +28,34 @@ class ArchiveService {
    * A "Time-Travel" heuristic to identify aged domains vs newly repurposed ones.
    */
   public async getHistory(domain: string) {
+    const cacheKey = `wayback:${domain.toLowerCase()}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
     const url = `http://archive.org/wayback/available?url=${domain}`;
     try {
       const response = await axios.get(url, { timeout: 5000 });
       const snapshots = response.data?.archived_snapshots;
       
       if (!snapshots || Object.keys(snapshots).length === 0) {
-        return {
+        const res = {
           hasHistory: false,
           firstSeen: null,
           message: "No historical record found. This domain might be extremely new or never crawled."
         };
+        this.cache.set(cacheKey, res);
+        return res;
       }
 
       const closest = snapshots.closest;
-      return {
+      const res = {
         hasHistory: true,
         firstSeen: closest.timestamp, // Format: YYYYMMDDhhmmss
         url: closest.url,
         message: `Domain first seen in global archives on ${closest.timestamp.substring(0, 4)}.`
       };
+      this.cache.set(cacheKey, res);
+      return res;
     } catch (error: any) {
       console.error(`[ArchiveService] Wayback lookup failed:`, error.message);
       return null;
@@ -51,7 +65,7 @@ class ArchiveService {
   /**
    * Generate a signal based on domain maturity and archive presence.
    */
-  public async getMaturitySignal(domain: string) {
+  public async getMaturitySignal(domain: string): Promise<HeuristicResult | null> {
     const history = await this.getHistory(domain);
     if (!history) return null;
 
@@ -61,7 +75,7 @@ class ArchiveService {
         status: "warn",
         description: "This domain has no history in global web archives. High probability of being a recently registered disposable domain.",
         scoreImpact: 15,
-      };
+      } satisfies HeuristicResult;
     }
 
     // Calculate age from archive timestamp
@@ -75,7 +89,7 @@ class ArchiveService {
         status: "pass",
         description: `Domain has a stable presence in web archives dating back to ${firstYear} (${archiveAge} years).`,
         scoreImpact: -15, // Trust signal
-      };
+      } satisfies HeuristicResult;
     }
 
     return {
@@ -83,7 +97,7 @@ class ArchiveService {
       status: "warn",
       description: `Domain only appeared in archives recently (${firstYear}). Frequent pattern for short-lived phishing campaigns.`,
       scoreImpact: 5,
-    };
+    } satisfies HeuristicResult;
   }
 }
 

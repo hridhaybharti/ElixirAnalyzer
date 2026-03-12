@@ -3,6 +3,17 @@ import { api, buildUrl } from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
+const apiKey =
+  (import.meta as any).env?.VITE_API_KEY &&
+  String((import.meta as any).env.VITE_API_KEY).trim()
+    ? String((import.meta as any).env.VITE_API_KEY).trim()
+    : null;
+
+function apiHeaders(extra?: Record<string, string>) {
+  const base = extra ? { ...extra } : {};
+  return apiKey ? { ...base, "x-api-key": apiKey } : base;
+}
+
 /* ---------------- Types ---------------- */
 
 // Frontend-only input (DO NOT send inputType to backend)
@@ -33,7 +44,7 @@ export function useCreateAnalysis() {
 
       const res = await fetch(api.analyze.create.path, {
         method: api.analyze.create.method,
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload),
         credentials: "include",
       });
@@ -74,7 +85,7 @@ export function useAnalysis(id: number) {
     queryKey: [api.analysis.get.path, id],
     queryFn: async () => {
       const url = buildUrl(api.analysis.get.path, { id });
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(url, { headers: apiHeaders(), credentials: "include" });
 
       if (res.status === 404) return null;
       if (!res.ok) throw new Error("Failed to fetch analysis");
@@ -92,6 +103,7 @@ export function useHistory() {
     queryKey: [api.history.list.path],
     queryFn: async () => {
       const res = await fetch(api.history.list.path, {
+        headers: apiHeaders(),
         credentials: "include",
       });
 
@@ -112,6 +124,7 @@ export function useClearHistory() {
     mutationFn: async () => {
       const res = await fetch(api.history.clear.path, {
         method: api.history.clear.method,
+        headers: apiHeaders(),
         credentials: "include",
       });
 
@@ -135,25 +148,14 @@ export function useClearHistory() {
 
 export function useReputationStatus() {
   return useQuery({
-    queryKey: ["/api/reputation/status"],
+    queryKey: [api.reputation.status.path],
     queryFn: async () => {
-      const res = await fetch("/api/reputation/status", {
+      const res = await fetch(api.reputation.status.path, {
+        headers: apiHeaders(),
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch engine status");
-      return res.json() as Promise<{
-        reputation: {
-          loaded: boolean;
-          count: number;
-          lastSync: string | null;
-          source: string;
-        };
-        secrets: {
-          virusTotal: { active: boolean; provider: string; masked: string };
-          abuseIPDB: { active: boolean; provider: string; masked: string };
-          ipApi: { active: boolean; provider: string; masked: string };
-        };
-      }>;
+      return api.reputation.status.responses[200].parse(await res.json());
     },
     refetchInterval: 60000,
   });

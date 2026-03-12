@@ -1,7 +1,9 @@
-import { chromium } from 'playwright';
-import path from 'path';
-import fs from 'fs';
-import { HeuristicResult } from '@shared/schema';
+import path from "path";
+import fs from "fs";
+import { createRequire } from "module";
+import { promises as dns } from "dns";
+import net from "net";
+import type { HeuristicResult } from "@shared/schema";
 
 /**
  * Visual Intelligence Service (The 'Hazmat Suit')
@@ -10,7 +12,12 @@ import { HeuristicResult } from '@shared/schema';
  */
 class VisualEngine {
   private static instance: VisualEngine;
-  private screenshotDir = path.join(process.cwd(), 'server', 'data', 'screenshots');
+  private screenshotDir = path.join(
+    process.cwd(),
+    "server",
+    "data",
+    "screenshots",
+  );
 
   private constructor() {
     if (!fs.existsSync(this.screenshotDir)) {
@@ -31,40 +38,62 @@ class VisualEngine {
    */
   public async captureSafeScreenshot(url: string, id: string) {
     console.log(`[VisualEngine] Attempting capture for: ${url}`);
-    
+
+    if (process.env.VISUAL_CAPTURE_ENABLED !== "1") {
+      return { success: false, error: "Visual capture disabled" };
+    }
+
+    const validated = await this.validatePublicHttpUrl(url);
+    if (!validated.ok) {
+      return { success: false, error: validated.error };
+    }
+	    
     // Check if browsers are available (graceful failure)
     try {
+      const require = createRequire(import.meta.url);
+      const { chromium } = require("playwright") as any;
       const browser = await chromium.launch({ headless: true });
       const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+        userAgent:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
       });
       
       const page = await context.newPage();
       
       // Strict 15s timeout for safety
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 15000 });
+      await page.goto(validated.url.toString(), {
+        waitUntil: "networkidle",
+        timeout: 15000,
+      });
       
       const filename = `${id}.jpg`;
       const fullPath = path.join(this.screenshotDir, filename);
       
-      await page.screenshot({ path: fullPath, type: 'jpeg', quality: 80 });
+      await page.screenshot({ path: fullPath, type: "jpeg", quality: 80 });
       
       // 🔥 Advanced Behavioral DOM Signals
       // 1. Hidden 1x1 iframes (often used for drive-by malware)
-      const tinyIframes = await page.$$eval('iframe', iframes => 
-        iframes.filter(i => {
-          const style = window.getComputedStyle(i);
-          return (parseInt(style.width) <= 1 && parseInt(style.height) <= 1) || style.display === 'none';
-        }).length
+      const tinyIframes = await page.$$eval(
+        "iframe",
+        (iframes: HTMLIFrameElement[]) =>
+          iframes.filter((i) => {
+            const style = window.getComputedStyle(i);
+            return (
+              (parseInt(style.width) <= 1 && parseInt(style.height) <= 1) ||
+              style.display === "none"
+            );
+          }).length,
       );
 
       // 2. High-volume tracking scripts (indicates laundry/tracking traffic)
-      const trackingScripts = await page.$$eval('script[src]', scripts =>
-        scripts.filter(s => {
-          const src = s.getAttribute('src') || '';
-          return /track|analytics|pixel|ads|collector|logger/i.test(src);
-        }).length
+      const trackingScripts = await page.$$eval(
+        "script[src]",
+        (scripts: HTMLScriptElement[]) =>
+          scripts.filter((s) => {
+            const src = s.getAttribute("src") || "";
+            return /track|analytics|pixel|ads|collector|logger/i.test(src);
+          }).length,
       );
 
       // 3. Password field check
@@ -80,13 +109,54 @@ class VisualEngine {
           hasPasswordField: !!hasPassword,
           formCount: forms.length,
           tinyIframeCount: tinyIframes,
-          trackingScriptCount: trackingScripts
+          trackingScriptCount: trackingScripts,
         }
       };
     } catch (error: any) {
-      console.warn(`[VisualEngine] Capture failed (likely missing browser binaries):`, error.message);
-      return { success: false, error: 'Headless browser not available or timeout' };
+      console.warn(
+        `[VisualEngine] Capture failed (likely missing browser binaries):`,
+        error.message,
+      );
+      return { success: false, error: "Headless browser not available or timeout" };
     }
+  }
+
+  private async validatePublicHttpUrl(
+    rawUrl: string,
+  ): Promise<{ ok: true; url: URL } | { ok: false; error: string }> {
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return { ok: false, error: "Invalid URL" };
+    }
+
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { ok: false, error: "Unsupported URL protocol" };
+    }
+
+    const host = parsed.hostname;
+
+    const ipVersion = net.isIP(host);
+    if (ipVersion) {
+      if (!isPublicIp(host)) return { ok: false, error: "Blocked IP address" };
+      return { ok: true, url: parsed };
+    }
+
+    try {
+      const addrs = await dns.lookup(host, { all: true, verbatim: true });
+      if (!addrs.length) return { ok: false, error: "DNS lookup failed" };
+
+      for (const a of addrs) {
+        if (!isPublicIp(a.address)) {
+          return { ok: false, error: "Blocked hostname (non-public DNS)" };
+        }
+      }
+    } catch {
+      return { ok: false, error: "DNS lookup failed" };
+    }
+
+    return { ok: true, url: parsed };
   }
 
   /**
@@ -130,3 +200,40 @@ class VisualEngine {
 }
 
 export const visualEngine = VisualEngine.getInstance();
+
+function isPublicIp(ip: string): boolean {
+  const v = net.isIP(ip);
+  if (!v) return false;
+
+  if (v === 4) {
+    const parts = ip.split(".").map((x) => Number(x));
+    if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return false;
+
+    const [a, b] = parts;
+
+    if (a === 0) return false;
+    if (a === 10) return false;
+    if (a === 127) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+    if (a >= 224) return false;
+    if (ip === "255.255.255.255") return false;
+
+    return true;
+  }
+
+  const lowered = ip.toLowerCase();
+  if (lowered === "::1") return false;
+  if (lowered.startsWith("fc") || lowered.startsWith("fd")) return false;
+  if (
+    lowered.startsWith("fe8") ||
+    lowered.startsWith("fe9") ||
+    lowered.startsWith("fea") ||
+    lowered.startsWith("feb")
+  ) {
+    return false;
+  }
+
+  return true;
+}

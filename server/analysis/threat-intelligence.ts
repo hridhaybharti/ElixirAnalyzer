@@ -32,7 +32,7 @@ export interface WhoisData {
   expirationDate: string;
   nameServers: string[];
   registrantCountry?: string;
-  age: number; // days
+  ageInDays: number;
   isPrivate: boolean;
 }
 
@@ -464,7 +464,9 @@ export async function lookupWhoisData(domain: string): Promise<WhoisData | null>
       domain: "youtube.com",
       registrationDate: "2005-02-14",
       expirationDate: "2025-02-14",
-      age: Math.floor((Date.now() - new Date("2005-02-14").getTime()) / (1000 * 60 * 60 * 24)),
+      ageInDays: Math.floor(
+        (Date.now() - new Date("2005-02-14").getTime()) / (1000 * 60 * 60 * 24),
+      ),
       registrar: "MarkMonitor, Inc.",
       nameServers: ["ns1.google.com", "ns2.google.com", "ns3.google.com", "ns4.google.com"],
       isPrivate: false,
@@ -474,7 +476,9 @@ export async function lookupWhoisData(domain: string): Promise<WhoisData | null>
       domain: "google.com",
       registrationDate: "1997-09-15",
       expirationDate: "2025-09-14",
-      age: Math.floor((Date.now() - new Date("1997-09-15").getTime()) / (1000 * 60 * 60 * 24)),
+      ageInDays: Math.floor(
+        (Date.now() - new Date("1997-09-15").getTime()) / (1000 * 60 * 60 * 24),
+      ),
       registrar: "MarkMonitor, Inc.",
       nameServers: ["ns1.google.com", "ns2.google.com", "ns3.google.com", "ns4.google.com"],
       isPrivate: false,
@@ -484,7 +488,9 @@ export async function lookupWhoisData(domain: string): Promise<WhoisData | null>
       domain: "github.com",
       registrationDate: "2007-10-29",
       expirationDate: "2025-10-29",
-      age: Math.floor((Date.now() - new Date("2007-10-29").getTime()) / (1000 * 60 * 60 * 24)),
+      ageInDays: Math.floor(
+        (Date.now() - new Date("2007-10-29").getTime()) / (1000 * 60 * 60 * 24),
+      ),
       registrar: "NameSecure, LLC",
       nameServers: ["dns1.p08.nsone.net", "dns2.p08.nsone.net"],
       isPrivate: false,
@@ -494,7 +500,9 @@ export async function lookupWhoisData(domain: string): Promise<WhoisData | null>
       domain: "microsoft.com",
       registrationDate: "1994-12-01",
       expirationDate: "2025-11-30",
-      age: Math.floor((Date.now() - new Date("1994-12-01").getTime()) / (1000 * 60 * 60 * 24)),
+      ageInDays: Math.floor(
+        (Date.now() - new Date("1994-12-01").getTime()) / (1000 * 60 * 60 * 24),
+      ),
       registrar: "MarkMonitor, Inc.",
       nameServers: ["ns1.msft.net", "ns2.msft.net"],
       isPrivate: false,
@@ -512,7 +520,7 @@ export async function lookupWhoisData(domain: string): Promise<WhoisData | null>
       domain: cleanDomain,
       registrationDate: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       expirationDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-      age: Math.floor(Math.random() * 30),
+      ageInDays: Math.floor(Math.random() * 30),
       registrar: ["Namecheap", "GoDaddy"][Math.floor(Math.random() * 2)],
       nameServers: ["ns1.malicious.net", "ns2.malicious.net"],
       isPrivate: true,
@@ -523,13 +531,15 @@ export async function lookupWhoisData(domain: string): Promise<WhoisData | null>
   // For unknown domains, generate mock data
   const registrationDate = new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000);
   const expirationDate = new Date(registrationDate.getTime() + 365 * 24 * 60 * 60 * 1000);
-  const age = Math.floor((Date.now() - registrationDate.getTime()) / (1000 * 60 * 60 * 24));
+  const ageInDays = Math.floor(
+    (Date.now() - registrationDate.getTime()) / (1000 * 60 * 60 * 24),
+  );
 
   return {
     domain: cleanDomain,
     registrationDate: registrationDate.toISOString().split("T")[0],
     expirationDate: expirationDate.toISOString().split("T")[0],
-    age,
+    ageInDays,
     registrar: ["GoDaddy", "Namecheap", "Google Domains"][Math.floor(Math.random() * 3)],
     nameServers: generateNameServers(),
     isPrivate: Math.random() > 0.8,
