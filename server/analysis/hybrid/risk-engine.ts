@@ -11,6 +11,8 @@ import { CampaignDNAEngine } from '../dna/campaign-tracker';
 import { ASNForensicService } from '../infrastructure/asn-lookup';
 import { BrandVisionService } from '../vision/brand-scanner';
 import { visualEngine } from '../visual-engine';
+import { PortIntelligenceService } from '../protocols/port-intelligence';
+import dns from 'dns/promises';
 
 export class HybridRiskEngine {
   static async analyze(type: "ip" | "domain" | "url", input: string): Promise<FinalAnalysisReport & { dnaMatch?: any }> {
@@ -20,8 +22,17 @@ export class HybridRiskEngine {
     const features = FeatureExtractor.extract(input);
     const hostname = type === "url" ? new URL(input.startsWith('http') ? input : `https://${input}`).hostname : input;
 
+    // Resolve IP for port intelligence if needed
+    let targetIp: string | null = type === "ip" ? input : null;
+    if (!targetIp) {
+      try {
+        const addrs = await dns.resolve4(hostname);
+        if (addrs.length > 0) targetIp = addrs[0];
+      } catch { /* ignore resolution errors */ }
+    }
+
     // 2. Parallel Signal Gathering (The Blitz)
-    const [heuristics, aiSignals, osintSignals, dnsSignal, ipNeighborSignal, tlsSignal, driftSignal, asnSignal] = await Promise.all([
+    const [heuristics, aiSignals, osintSignals, dnsSignal, ipNeighborSignal, tlsSignal, driftSignal, asnSignal, portSignal] = await Promise.all([
       HeuristicEngine.generateSignals(features),
       AIInferenceService.getSignals(input),
       ThreatIntelService.getSignals(type, input),
@@ -29,34 +40,19 @@ export class HybridRiskEngine {
       type === "ip" ? IPNeighborService.analyze(input) : Promise.resolve(null),
       type !== "ip" ? TLSService.analyze(hostname) : Promise.resolve(null),
       type !== "ip" ? ContentDriftService.analyze(hostname) : Promise.resolve(null),
-      ASNForensicService.analyze(hostname)
+      ASNForensicService.analyze(hostname),
+      targetIp ? PortIntelligenceService.analyze(targetIp) : Promise.resolve(null)
     ]);
 
     // 🚀 Strike 2: Brand Vision AI (Visual Verification)
-    // We need the screenshot from the visual engine first
-    const captureId = Buffer.from(input).toString('hex').substring(0, 12);
-    const visualCapture = await visualEngine.captureSafeScreenshot(input, captureId);
-    
-    if (visualCapture.success && visualCapture.path) {
-      // Pass the relative path from the server root
-      const screenshotRelativePath = `server/data/screenshots/${captureId}.jpg`;
-      const visionSignal = await BrandVisionService.analyze(screenshotRelativePath, hostname);
-      
-      if (visionSignal) {
-        visionSignal.heuristics.forEach(h => heuristics.push({
-          name: h.name,
-          score: h.score,
-          description: h.description,
-          severity: 'critical'
-        }));
-      }
+    // ... rest of the code ...
 
       // Also add standard visual heuristics (password fields, etc.)
       const standardVisual = visualEngine.getVisualHeuristics(visualCapture);
       heuristics.push(...standardVisual.map(h => ({ ...h, severity: h.status as any })));
     }
 
-    // 3. Inject External Heuristics (DNS + IP Neighbor + TLS + Drift + ASN)
+    // 3. Inject External Heuristics (DNS + IP Neighbor + TLS + Drift + ASN + Port)
     if (dnsSignal) {
       dnsSignal.heuristics.forEach(h => heuristics.push({
         name: h.name,
@@ -95,6 +91,15 @@ export class HybridRiskEngine {
 
     if (asnSignal) {
       asnSignal.heuristics.forEach(h => heuristics.push({
+        name: h.name,
+        score: h.score,
+        description: h.description,
+        severity: h.score >= 20 ? 'high' : 'medium'
+      }));
+    }
+
+    if (portSignal) {
+      portSignal.heuristics.forEach(h => heuristics.push({
         name: h.name,
         score: h.score,
         description: h.description,
