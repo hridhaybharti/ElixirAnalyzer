@@ -13,6 +13,7 @@ import { BrandVisionService } from '../vision/brand-scanner';
 import { visualEngine } from '../visual-engine';
 import { PortIntelligenceService } from '../protocols/port-intelligence';
 import { PDNSHistoryService } from '../pdns/pdns-history';
+import { CTLogService } from '../ctlogs/ct-log-scanner';
 import dns from 'dns/promises';
 
 export class HybridRiskEngine {
@@ -33,7 +34,7 @@ export class HybridRiskEngine {
     }
 
     // 2. Parallel Signal Gathering (The Blitz)
-    const [heuristics, aiSignals, osintSignals, dnsSignal, ipNeighborSignal, tlsSignal, driftSignal, asnSignal, portSignal, pdnsSignal] = await Promise.all([
+    const [heuristics, aiSignals, osintSignals, dnsSignal, ipNeighborSignal, tlsSignal, driftSignal, asnSignal, portSignal, pdnsSignal, ctSignal] = await Promise.all([
       HeuristicEngine.generateSignals(features),
       AIInferenceService.getSignals(input),
       ThreatIntelService.getSignals(type, input),
@@ -43,31 +44,11 @@ export class HybridRiskEngine {
       type !== "ip" ? ContentDriftService.analyze(hostname) : Promise.resolve(null),
       ASNForensicService.analyze(hostname),
       targetIp ? PortIntelligenceService.analyze(targetIp) : Promise.resolve(null),
-      type !== "ip" ? PDNSHistoryService.analyze(hostname) : Promise.resolve(null)
+      type !== "ip" ? PDNSHistoryService.analyze(hostname) : Promise.resolve(null),
+      type !== "ip" ? CTLogService.analyze(hostname) : Promise.resolve(null)
     ]);
 
-    // 🚀 Strike 2: Brand Vision AI (Visual Verification)
-    const captureId = Buffer.from(input).toString('hex').substring(0, 12);
-    const visualCapture = await visualEngine.captureSafeScreenshot(input, captureId);
-    
-    if (visualCapture.success && visualCapture.path) {
-      const screenshotRelativePath = `server/data/screenshots/${captureId}.jpg`;
-      const visionSignal = await BrandVisionService.analyze(screenshotRelativePath, hostname);
-      
-      if (visionSignal) {
-        visionSignal.heuristics.forEach(h => heuristics.push({
-          name: h.name,
-          score: h.score,
-          description: h.description,
-          severity: 'critical'
-        }));
-      }
-
-      const standardVisual = visualEngine.getVisualHeuristics(visualCapture);
-      heuristics.push(...standardVisual.map(h => ({ ...h, severity: h.status as any })));
-    }
-
-    // 3. Inject External Heuristics (DNS + IP Neighbor + TLS + Drift + ASN + Port + PDNS)
+    // 3. Inject External Heuristics (DNS + IP Neighbor + TLS + Drift + ASN + Port + PDNS + CT)
     if (dnsSignal) {
       dnsSignal.heuristics.forEach(h => heuristics.push({
         name: h.name, score: h.score, description: h.description, severity: h.score >= 25 ? 'high' : 'medium'
@@ -108,6 +89,33 @@ export class HybridRiskEngine {
       pdnsSignal.heuristics.forEach(h => heuristics.push({
         name: h.name, score: h.score, description: h.description, severity: h.score >= 30 ? 'critical' : 'high'
       }));
+    }
+
+    if (ctSignal) {
+      ctSignal.heuristics.forEach(h => heuristics.push({
+        name: h.name, score: h.score, description: h.description, severity: h.score >= 25 ? 'high' : 'medium'
+      }));
+    }
+
+    // 🚀 Strike 2: Brand Vision AI (Visual Verification)
+    const captureId = Buffer.from(input).toString('hex').substring(0, 12);
+    const visualCapture = await visualEngine.captureSafeScreenshot(input, captureId);
+    
+    if (visualCapture.success && visualCapture.path) {
+      const screenshotRelativePath = `server/data/screenshots/${captureId}.jpg`;
+      const visionSignal = await BrandVisionService.analyze(screenshotRelativePath, hostname);
+      
+      if (visionSignal) {
+        visionSignal.heuristics.forEach(h => heuristics.push({
+          name: h.name,
+          score: h.score,
+          description: h.description,
+          severity: 'critical'
+        }));
+      }
+
+      const standardVisual = visualEngine.getVisualHeuristics(visualCapture);
+      heuristics.push(...standardVisual.map(h => ({ ...h, severity: h.status as any })));
     }
 
     // 4. Signal Aggregation & Scoring
