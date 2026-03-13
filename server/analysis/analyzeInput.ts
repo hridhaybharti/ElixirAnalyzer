@@ -2,6 +2,7 @@ import { HeuristicResult } from "@shared/schema";
 import { HybridRiskEngine } from "./hybrid/risk-engine";
 import { sanitizeInput } from "./sanitization";
 import { webhookService } from "../utils/webhooks";
+import { NarrativeEngine } from "./hybrid/narrative-engine";
 
 export type InputType = "ip" | "domain" | "url";
 
@@ -28,13 +29,7 @@ export async function analyzeInput(type: InputType, input: string) {
 
   // 4. Construct the Intelligent Analysis Result
   const highImpactSignals = report.explanationSignals.slice(0, 3).join(". ");
-  const intelligentSummary = report.anomalyFlags.includes("STEALTH_THREAT_DETECTED") 
-    ? `CRITICAL: AI detected a stealth zero-day threat. ${highImpactSignals}`
-    : report.finalRiskScore >= 70
-      ? `High-risk activity detected. Infrastructure signals: ${highImpactSignals}.`
-      : report.finalRiskScore >= 30
-        ? `Suspicious patterns identified. Minor anomalies found: ${highImpactSignals}.`
-        : "Infrastructure appears consistent with reputable patterns. No immediate threats detected.";
+  const intelligentSummary = NarrativeEngine.generate(report);
 
   const resultObj = {
     riskScore: report.finalRiskScore,
