@@ -3,6 +3,7 @@ import fs from "fs";
 import { createRequire } from "module";
 import { promises as dns } from "dns";
 import net from "net";
+import { SandboxGeoService } from "./hybrid/sandbox-geo";
 import type { HeuristicResult } from "@shared/schema";
 
 /**
@@ -139,6 +140,9 @@ class VisualEngine {
       await page.waitForTimeout(3000);
       
       await browser.close();
+
+      // 🚀 Betterify: Map connection geo-locations
+      const mappedNetworkLog = await SandboxGeoService.mapConnections(networkLog.slice(0, 50));
       
       return {
         success: true,
@@ -148,7 +152,7 @@ class VisualEngine {
           formCount: forms.length,
           tinyIframeCount: tinyIframes,
           trackingScriptCount: trackingScripts,
-          networkLog: networkLog.slice(0, 50), // Capture first 50 requests
+          networkLog: mappedNetworkLog,
           wasRecursive: wasRedirectedByAI
         }
       };

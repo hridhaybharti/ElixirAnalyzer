@@ -639,11 +639,24 @@ function BehavioralSandboxCard({ signals }: { signals: any }) {
         <CardContent>
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
             {signals.networkLog.map((log: any, i: number) => (
-              <div key={i} className="flex items-start gap-3 p-2 rounded bg-slate-900/50 border border-slate-800/50 text-[11px] font-mono group hover:border-emerald-500/30 transition-colors">
-                <span className="text-slate-500">[{i.toString().padStart(2, '0')}]</span>
-                <span className="text-emerald-400 uppercase w-12">{log.method}</span>
-                <span className="text-slate-300 break-all flex-1">{log.url}</span>
-                <span className="text-slate-500 italic">{log.type}</span>
+              <div key={i} className="flex flex-col gap-1 p-2 rounded bg-slate-900/50 border border-slate-800/50 text-[11px] font-mono group hover:border-emerald-500/30 transition-colors">
+                <div className="flex items-start gap-3">
+                  <span className="text-slate-500">[{i.toString().padStart(2, '0')}]</span>
+                  <span className="text-emerald-400 uppercase w-12">{log.method}</span>
+                  <span className="text-slate-300 break-all flex-1">{log.url}</span>
+                  <span className="text-slate-500 italic">{log.type}</span>
+                </div>
+                {log.countryCode && (
+                  <div className="ml-8 flex items-center gap-2 text-[10px]">
+                    <span className="text-slate-500 flex items-center gap-1">
+                      <Globe className="w-2.5 h-2.5" /> {log.ip}
+                    </span>
+                    <span className="bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                      {log.countryCode} • {log.country}
+                    </span>
+                    {log.isp && <span className="text-slate-600 truncate max-w-[150px]">{log.isp}</span>}
+                  </div>
+                )}
               </div>
             ))}
           </div>
