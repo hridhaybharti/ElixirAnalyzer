@@ -5,6 +5,7 @@ import { serveStatic } from "./static";
 import { setupVite } from "./vite";
 import { createServer } from "http";
 import { reputationService } from "./analysis/reputation";
+import { OIDCHandshake } from "./auth/oidc-handshake";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
@@ -36,6 +37,14 @@ const limiter = rateLimit({
 
 app.use("/api/", limiter);
 app.use(requireApiKey);
+
+// 🔥 Global OIDC Handshake - Protect all analysis routes
+app.use("/api/analyze", (req, res, next) => {
+  if (process.env.SSO_HANDSHAKE_ENABLED === "1") {
+    return OIDCHandshake.authenticate(req, res, next);
+  }
+  next();
+});
 
 const httpServer = createServer(app);
 
