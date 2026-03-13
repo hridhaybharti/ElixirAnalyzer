@@ -1,236 +1,65 @@
 import { HeuristicResult } from "@shared/schema";
-import { analyzeIP } from "../analyzers/ip";
-import { analyzeDomain } from "../analyzers/domain";
-import { analyzeURL } from "../analyzers/url";
-import { applyCorrelations } from "../risk/correlation";
+import { HybridRiskEngine } from "./hybrid/risk-engine";
 import { sanitizeInput } from "./sanitization";
-import { analyzeObfuscation } from "./obfuscation";
-import { analyzeIDNDomain } from "./idn";
-import { analyzeURLPath } from "./path-analysis";
-import { analyzePort } from "./port-analysis";
-import { analyzeDomainReputation } from "./domain-reputation";
-import { analyzeRedirects } from "./redirect-analysis";
-import { analyzeMobileThreats } from "./mobile-threats";
-import { reputationService } from "./reputation";
-import { analyzeHomoglyphs } from "./homoglyph";
-import { osintService } from "./osint-engine";
-import { archiveService } from "./archive-intel";
-import { visualEngine } from "./visual-engine";
 import { webhookService } from "../utils/webhooks";
-import {
-  lookupWhoisData,
-  checkIPReputation,
-  runDetectionEngines,
-  checkURLReputation,
-  type WhoisData,
-  type DetectionEngineResult,
-} from "./threat-intelligence";
 
 export type InputType = "ip" | "domain" | "url";
 
 /**
- * Stage 1: Pre-processing & Sanitization
- */
-function preprocess(input: string) {
-  const sanitization = sanitizeInput(input);
-  const obfuscation = analyzeObfuscation(sanitization.sanitized);
-  const analyzedInput = obfuscation.obfuscationLevel === "high" ? obfuscation.decodedContent : sanitization.sanitized;
-
-  return {
-    analyzedInput,
-    heuristics: [...sanitization.heuristics, ...obfuscation.heuristics]
-  };
-}
-
-/**
- * Stage 2: Intelligence Gathering (Parallel OSINT v2)
- */
-async function gatherIntelligence(type: InputType, target: string) {
-  const intel: any = {
-    ipReputation: null,
-    abuseIPDB: null,
-    ipLocation: null,
-    whoisData: null,
-    virusTotal: null,
-    urlScan: null,
-    archiveHistory: null,
-    visualCapture: null,
-    detectionEngines: [],
-    urlReputation: [],
-  };
-
-  const tasks: Promise<void>[] = [];
-
-  if (type === "ip") {
-    tasks.push(checkIPReputation(target).then(res => { intel.ipReputation = res; }));
-    tasks.push(osintService.getAbuseIPDB(target).then(res => { intel.abuseIPDB = res; }));
-    tasks.push(osintService.getVirusTotal(target, "ip").then(res => { intel.virusTotal = res; }));
-    tasks.push(osintService.getIPLocation(target).then(res => { intel.ipLocation = res; }));
-    tasks.push(runDetectionEngines(target).then(res => { intel.detectionEngines = res; }));
-  } else if (type === "domain" || type === "url") {
-    const hostname = type === "url" ? new URL(target.startsWith('http') ? target : `https://${target}`).hostname : target;
-
-    tasks.push(lookupWhoisData(hostname).then(res => { intel.whoisData = res; }));
-    tasks.push(osintService.getVirusTotal(hostname, type === "url" ? "url" : "domain").then(res => { intel.virusTotal = res; }));
-    tasks.push(checkURLReputation(hostname).then(res => { intel.urlReputation = res; }));
-    tasks.push(runDetectionEngines(hostname).then(res => { intel.detectionEngines = res; }));
-    tasks.push(archiveService.getHistory(hostname).then(res => { intel.archiveHistory = res; }));
-    
-    if (type === "url") {
-      tasks.push(osintService.getURLScan(target).then(res => { intel.urlScan = res; }));
-      if (process.env.VISUAL_CAPTURE_ENABLED === "1") {
-        // Background visual capture (best effort)
-        const captureId = Buffer.from(target).toString('hex').substring(0, 12);
-        tasks.push(visualEngine.captureSafeScreenshot(target, captureId).then(res => { intel.visualCapture = res; }));
-      }
-    }
-  }
-
-  // Optimized timeout: 10s for deep OSINT
-  await Promise.race([
-    Promise.allSettled(tasks),
-    new Promise(resolve => setTimeout(resolve, 10000))
-  ]);
-
-  return intel;
-}
-
-/**
- * Main Analysis Pipeline
+ * Main Analysis Pipeline - Re-engineered for Hybrid Intelligence v3
  */
 export async function analyzeInput(type: InputType, input: string) {
   const startAt = Date.now();
-  console.log(`[analyzeInput] Pipeline started for ${type}: ${input}`);
+  console.log(`[analyzeInput] Re-engineered Pipeline started for ${type}: ${input}`);
 
-  // 1. Preprocess
-  const { analyzedInput, heuristics: baseHeuristics } = preprocess(input);
-  const evidence: HeuristicResult[] = [...baseHeuristics];
+  // 1. Sanitization & Normalization
+  const { sanitized } = sanitizeInput(input);
 
-  // 2. Intelligence Gathering
-  const intel = await gatherIntelligence(type, analyzedInput);
+  // 2. Trigger the Hybrid Risk Engine (The Sandbox Brain)
+  const report = await HybridRiskEngine.analyze(type, sanitized);
 
-  // 3. Execution
-  let score = evidence.reduce((sum, h) => sum + h.scoreImpact, 0);
+  // 3. Transform to Legacy Evidence Format for Frontend Compatibility
+  const evidence: HeuristicResult[] = report.explanationSignals.map(sig => ({
+    name: "Signal Insight",
+    status: report.finalRiskScore >= 70 ? "fail" : report.finalRiskScore >= 30 ? "warn" : "pass",
+    description: sig,
+    scoreImpact: 0 // Already accounted for in finalRiskScore
+  }));
 
-  if (type === "ip") {
-    const r = await analyzeIP(analyzedInput);
-    score += r.score;
-    evidence.push(...r.heuristics);
-
-    if (intel.ipReputation?.abuseConfidenceScore > 25) {
-      const impact = Math.floor(intel.ipReputation.abuseConfidenceScore / 2);
-      score += impact;
-      evidence.push({
-        name: "IP Reputation Score",
-        status: intel.ipReputation.abuseConfidenceScore > 75 ? "fail" : "warn",
-        description: `IP has abuse confidence score of ${intel.ipReputation.abuseConfidenceScore}%`,
-        scoreImpact: impact,
-      });
-    }
-  }
-
-  if (type === "domain" || type === "url") {
-    const targetHostname = type === "url" ? new URL(analyzedInput.startsWith('http') ? analyzedInput : `https://${analyzedInput}`).hostname : analyzedInput;
-
-    // Core Domain Heuristics
-    evidence.push(...analyzeIDNDomain(targetHostname).heuristics);
-    evidence.push(...analyzeDomainReputation(targetHostname).heuristics);
-
-    // Reputation & Homoglyph (The "Perfected" logic)
-    const repSignal = reputationService.getReputationSignal(targetHostname);
-    if (repSignal) {
-      evidence.push(repSignal);
-      score += repSignal.scoreImpact;
-    }
-
-    const homoglyphSignal = analyzeHomoglyphs(targetHostname);
-    if (homoglyphSignal && !repSignal) {
-      evidence.push(homoglyphSignal);
-      score += homoglyphSignal.scoreImpact;
-    }
-
-    const domainR = await analyzeDomain(targetHostname);
-    score += domainR.score;
-    evidence.push(...domainR.heuristics);
-
-    if (intel.whoisData) {
-      if (intel.whoisData.ageInDays < 30) {
-        score += 35;
-        evidence.push({ name: "Very New Domain", status: "fail", description: `Registered ${intel.whoisData.ageInDays} days ago`, scoreImpact: 35 });
-      }
-    }
-
-    // 🔥 Wayback Machine Archive Analysis
-    const archiveSignal = await archiveService.getMaturitySignal(targetHostname);
-    if (archiveSignal) {
-      evidence.push(archiveSignal);
-      score += archiveSignal.scoreImpact;
-    }
-
-    // 🔥 Visual Behavior Heuristics
-    if (type === "url" && intel.visualCapture) {
-      const visualSignals = visualEngine.getVisualHeuristics(intel.visualCapture);
-      for (const signal of visualSignals) {
-        evidence.push(signal);
-        score += signal.scoreImpact;
-      }
-    }
-  }
-
-  if (type === "url") {
-    const urlObj = new URL(analyzedInput.startsWith('http') ? analyzedInput : `https://${analyzedInput}`);
-    score += (await analyzeURL(analyzedInput)).score;
-    evidence.push(...analyzeURLPath(urlObj.pathname, urlObj.search).heuristics);
-    evidence.push(...analyzePort(urlObj).heuristics);
-    evidence.push(...analyzeRedirects(urlObj).heuristics);
-    evidence.push(...analyzeMobileThreats(urlObj).heuristics);
-  }
-
-  // 4. Scoring & Final Verdict
-  const { newEvidence, scoreBoost } = applyCorrelations(evidence, { input, type });
-  score = Math.min(100, Math.max(0, score + scoreBoost));
-
-  let riskLevel = "Safe";
-  if (score >= 70) riskLevel = "Malicious";
-  else if (score >= 30) riskLevel = "Suspicious";
-
-  const finalEvidence = newEvidence.map(e => ({ ...e, status: e.status as "pass" | "warn" | "fail" }));
-
-  console.log(`[analyzeInput] Pipeline complete in ${Date.now() - startAt}ms. Score: ${score}`);
-
-  const confidence = Math.round((finalEvidence.filter(e => e.status !== "pass").length / Math.max(finalEvidence.length, 1)) * 100);
-
+  // 4. Construct the Intelligent Analysis Result
   const resultObj = {
-    riskScore: score,
-    riskLevel,
-    confidence,
-    evidence: finalEvidence,
+    riskScore: report.finalRiskScore,
+    riskLevel: report.classification,
+    confidence: report.aiConfidence,
+    evidence,
     details: {
-      engine: "ThreatAnalyzer",
-      engineVersion: "2.1.0-optimized",
-      confidence,
-      evidence: finalEvidence, // Matches required field
-      heuristics: finalEvidence, // Optional field
-      threatIntelligence: intel,
+      engine: "Elixir Hybrid Sentinel",
+      engineVersion: "3.0.0-hybrid",
+      confidence: report.aiConfidence,
+      heuristicScore: report.heuristicScore,
+      osintScore: report.osintScore,
+      anomalyFlags: report.anomalyFlags,
+      evidence,
       metadata: {
         inputType: type,
         sanitizedInput: input,
-        hasCorrelations: true,
-        processingTimeMs: Date.now() - startAt
+        processingTimeMs: Date.now() - startAt,
+        isStealthThreat: report.anomalyFlags.includes("STEALTH_THREAT_DETECTED")
       }
     },
-    summary: `Analysis complete. Verdict: ${riskLevel}`
+    summary: report.anomalyFlags.includes("STEALTH_THREAT_DETECTED") 
+      ? "CRITICAL: Stealth Zero-Day Threat Detected by AI."
+      : `Hybrid analysis complete. Risk classification: ${report.classification}`
   };
 
-  // 🔥 Trigger Webhook for High Risk Threats (Background)
-  // We mock a temporary analysis object for the webhook
-  if (score >= 70) {
+  // 5. High-Risk Webhook Trigger
+  if (report.finalRiskScore >= 70) {
     webhookService.notifyHighRisk({ 
       id: 0, 
       input, 
       type, 
-      riskScore: score, 
-      riskLevel, 
+      riskScore: report.finalRiskScore, 
+      riskLevel: report.classification, 
       summary: resultObj.summary, 
       details: resultObj.details as any, 
       createdAt: new Date(), 
@@ -240,3 +69,4 @@ export async function analyzeInput(type: InputType, input: string) {
 
   return resultObj;
 }
+
