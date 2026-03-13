@@ -97,8 +97,30 @@ class VisualEngine {
       );
 
       // 3. Password field check
-      const hasPassword = await page.$('input[type="password"]');
+      let hasPassword = await page.$('input[type="password"]');
       const forms = await page.$$('form');
+      
+      // 🚀 Strike 2: Recursive Detonation - Look for "Click to Login" traps
+      let wasRedirectedByAI = false;
+      if (!hasPassword) {
+        console.log(`[VisualEngine] No password field found. Initiating AI-driven interaction scan...`);
+        // Find buttons that look like "Login", "Sign In", "Access", "Verify"
+        const loginButtons = await page.$$('button, a, input[type="button"], input[type="submit"]');
+        for (const btn of loginButtons) {
+          const text = await page.evaluate((el: any) => el.innerText || el.value, btn);
+          if (/login|sign in|access|verify|proceed|account|secure/i.test(text)) {
+            console.log(`[VisualEngine] Potential landing page trap detected. Clicking: ${text}`);
+            await Promise.all([
+              page.waitForNavigation({ waitUntil: 'networkidle', timeout: 5000 }).catch(() => {}),
+              btn.click()
+            ]);
+            wasRedirectedByAI = true;
+            // Check for password fields again after interaction
+            hasPassword = await page.$('input[type="password"]');
+            break;
+          }
+        }
+      }
       
       // 🚀 Strike 2: Capture the Network Log during detonation
       const networkLog: any[] = [];
@@ -126,7 +148,8 @@ class VisualEngine {
           formCount: forms.length,
           tinyIframeCount: tinyIframes,
           trackingScriptCount: trackingScripts,
-          networkLog: networkLog.slice(0, 50) // Capture first 50 requests
+          networkLog: networkLog.slice(0, 50), // Capture first 50 requests
+          wasRecursive: wasRedirectedByAI
         }
       };
     } catch (error: any) {
@@ -189,7 +212,9 @@ class VisualEngine {
       signals.push({
         name: "Credential Harvester Pattern",
         status: "fail",
-        description: "Headless inspection detected a password input field on a suspicious/non-reputable domain.",
+        description: visualSignals.wasRecursive 
+          ? "AI Recursive Detonation discovered a hidden login form behind a landing page trap." 
+          : "Headless inspection detected a password input field on a suspicious/non-reputable domain.",
         scoreImpact: 35
       });
     }
