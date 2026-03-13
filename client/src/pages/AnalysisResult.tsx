@@ -4,6 +4,7 @@ import { useAnalysis } from "@/hooks/use-analysis";
 
 import { RiskGauge } from "@/components/RiskGauge";
 import { HeuristicList } from "@/components/HeuristicList";
+import { SandboxSummary } from "@/components/SandboxSummary";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,6 +151,13 @@ export default function AnalysisResult() {
               {analysis.summary}
             </CardContent>
           </Card>
+
+          <SandboxSummary 
+            aiConfidence={details.confidence || 0}
+            heuristicScore={(details as any).heuristicScore || 0}
+            osintScore={(details as any).osintScore || 0}
+            anomalyFlags={(details as any).anomalyFlags || []}
+          />
         </motion.div>
 
         {/* RIGHT */}
