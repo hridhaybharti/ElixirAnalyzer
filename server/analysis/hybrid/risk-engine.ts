@@ -8,6 +8,7 @@ import { IPNeighborService } from '../ip/neighbor-intel';
 import { TLSService } from '../ssl/tls-fingerprint';
 import { ContentDriftService } from '../historical/content-drift';
 import { CampaignDNAEngine } from '../dna/campaign-tracker';
+import { ASNForensicService } from '../infrastructure/asn-lookup';
 
 export class HybridRiskEngine {
   static async analyze(type: "ip" | "domain" | "url", input: string): Promise<FinalAnalysisReport & { dnaMatch?: any }> {
@@ -18,17 +19,18 @@ export class HybridRiskEngine {
     const hostname = type === "url" ? new URL(input.startsWith('http') ? input : `https://${input}`).hostname : input;
 
     // 2. Parallel Signal Gathering (The Blitz)
-    const [heuristics, aiSignals, osintSignals, dnsSignal, ipNeighborSignal, tlsSignal, driftSignal] = await Promise.all([
+    const [heuristics, aiSignals, osintSignals, dnsSignal, ipNeighborSignal, tlsSignal, driftSignal, asnSignal] = await Promise.all([
       HeuristicEngine.generateSignals(features),
       AIInferenceService.getSignals(input),
       ThreatIntelService.getSignals(type, input),
       type !== "ip" ? DNSForensicService.analyze(hostname) : Promise.resolve(null),
       type === "ip" ? IPNeighborService.analyze(input) : Promise.resolve(null),
       type !== "ip" ? TLSService.analyze(hostname) : Promise.resolve(null),
-      type !== "ip" ? ContentDriftService.analyze(hostname) : Promise.resolve(null)
+      type !== "ip" ? ContentDriftService.analyze(hostname) : Promise.resolve(null),
+      ASNForensicService.analyze(hostname)
     ]);
 
-    // 3. Inject External Heuristics (DNS + IP Neighbor + TLS + Drift)
+    // 3. Inject External Heuristics (DNS + IP Neighbor + TLS + Drift + ASN)
     if (dnsSignal) {
       dnsSignal.heuristics.forEach(h => heuristics.push({
         name: h.name,
@@ -62,6 +64,15 @@ export class HybridRiskEngine {
         score: h.score,
         description: h.description,
         severity: h.score >= 25 ? 'high' : 'medium'
+      }));
+    }
+
+    if (asnSignal) {
+      asnSignal.heuristics.forEach(h => heuristics.push({
+        name: h.name,
+        score: h.score,
+        description: h.description,
+        severity: h.score >= 20 ? 'high' : 'medium'
       }));
     }
 
