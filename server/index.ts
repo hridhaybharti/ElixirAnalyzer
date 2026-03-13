@@ -38,14 +38,6 @@ const limiter = rateLimit({
 app.use("/api/", limiter);
 app.use(requireApiKey);
 
-// 🔥 Global OIDC Handshake - Protect all analysis routes
-app.use("/api/analyze", (req, res, next) => {
-  if (process.env.SSO_HANDSHAKE_ENABLED === "1") {
-    return OIDCHandshake.authenticate(req, res, next);
-  }
-  next();
-});
-
 const httpServer = createServer(app);
 
 // Extend IncomingMessage to store raw body
