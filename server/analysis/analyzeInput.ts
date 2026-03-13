@@ -27,6 +27,15 @@ export async function analyzeInput(type: InputType, input: string) {
   }));
 
   // 4. Construct the Intelligent Analysis Result
+  const highImpactSignals = report.explanationSignals.slice(0, 3).join(". ");
+  const intelligentSummary = report.anomalyFlags.includes("STEALTH_THREAT_DETECTED") 
+    ? `CRITICAL: AI detected a stealth zero-day threat. ${highImpactSignals}`
+    : report.finalRiskScore >= 70
+      ? `High-risk activity detected. Infrastructure signals: ${highImpactSignals}.`
+      : report.finalRiskScore >= 30
+        ? `Suspicious patterns identified. Minor anomalies found: ${highImpactSignals}.`
+        : "Infrastructure appears consistent with reputable patterns. No immediate threats detected.";
+
   const resultObj = {
     riskScore: report.finalRiskScore,
     riskLevel: report.classification,
@@ -47,9 +56,7 @@ export async function analyzeInput(type: InputType, input: string) {
         isStealthThreat: report.anomalyFlags.includes("STEALTH_THREAT_DETECTED")
       }
     },
-    summary: report.anomalyFlags.includes("STEALTH_THREAT_DETECTED") 
-      ? "CRITICAL: Stealth Zero-Day Threat Detected by AI."
-      : `Hybrid analysis complete. Risk classification: ${report.classification}`
+    summary: intelligentSummary
   };
 
   // 5. High-Risk Webhook Trigger
