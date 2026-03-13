@@ -1,4 +1,4 @@
-import { HfInference } from "@huggingface/inference";
+import { pipeline } from '@xenova/transformers';
 
 export interface AISignal {
   modelName: string;
@@ -7,39 +7,39 @@ export interface AISignal {
 }
 
 export class AIInferenceService {
-  private static hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
-  
-  // High-fidelity phishing detector from Hugging Face
-  private static LEXICAL_MODEL = "madhurjindal/autonlp-Phishing-Detector-20554160";
-  // Structural URL classifier
-  private static STRUCTURAL_MODEL = "elvis/distilbert-phishing-detector";
+  private static classifier: any = null;
+  private static MODEL_NAME = 'Xenova/distilbert-base-uncased-finetuned-phishing';
+
+  /**
+   * Initializes the local AI model (Transformers.js)
+   * Only loads once to conserve memory
+   */
+  private static async init() {
+    if (!this.classifier) {
+      console.log(`[AIInference] Loading local brain: ${this.MODEL_NAME}...`);
+      this.classifier = await pipeline('text-classification', this.MODEL_NAME);
+    }
+  }
 
   static async getSignals(input: string): Promise<AISignal[]> {
-    if (!process.env.HUGGINGFACE_API_KEY) {
-      console.warn("[AIInference] HUGGINGFACE_API_KEY missing. Skipping AI layer.");
-      return [];
-    }
-
     try {
-      const results = await Promise.all([
-        this.hf.textClassification({ model: this.LEXICAL_MODEL, inputs: input }),
-        this.hf.textClassification({ model: this.STRUCTURAL_MODEL, inputs: input })
-      ]);
+      await this.init();
+      
+      const results = await this.classifier(input);
+      const topResult = results[0];
+      
+      // The model labels are typically 'LABEL_1' (phish) and 'LABEL_0' (safe) 
+      // or literally 'phishing' / 'safe' depending on the export
+      const isMalicious = topResult.label.toLowerCase().includes('phish') || 
+                          topResult.label === 'LABEL_1';
 
-      return results.map((res, index) => {
-        const topResult = res[0];
-        const isMalicious = topResult.label.toLowerCase().includes("phish") || 
-                           topResult.label.toLowerCase().includes("malicious") ||
-                           topResult.label === "LABEL_1"; // Some models use LABEL_1 for positive
-
-        return {
-          modelName: index === 0 ? "LexicalPhishNet" : "StructuralClassifier",
-          maliciousProbability: isMalicious ? topResult.score : (1 - topResult.score),
-          label: isMalicious ? "phishing" : "safe"
-        };
-      });
+      return [{
+        modelName: "LocalSentinel-V1",
+        maliciousProbability: isMalicious ? topResult.score : (1 - topResult.score),
+        label: isMalicious ? "phishing" : "safe"
+      }];
     } catch (error) {
-      console.error("[AIInference] Error during inference:", error);
+      console.error("[AIInference] Local inference failed:", error);
       return [];
     }
   }

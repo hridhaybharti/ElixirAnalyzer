@@ -100,6 +100,22 @@ class VisualEngine {
       const hasPassword = await page.$('input[type="password"]');
       const forms = await page.$$('form');
       
+      // 🚀 Strike 2: Capture the Network Log during detonation
+      const networkLog: any[] = [];
+      page.on('request', (request: any) => {
+        const url = request.url();
+        if (url.startsWith('http')) {
+          networkLog.push({
+            url: url,
+            method: request.method(),
+            type: request.resourceType()
+          });
+        }
+      });
+
+      // Stay alive for a few more seconds to catch late-loading threats
+      await page.waitForTimeout(3000);
+      
       await browser.close();
       
       return {
@@ -110,6 +126,7 @@ class VisualEngine {
           formCount: forms.length,
           tinyIframeCount: tinyIframes,
           trackingScriptCount: trackingScripts,
+          networkLog: networkLog.slice(0, 50) // Capture first 50 requests
         }
       };
     } catch (error: any) {
