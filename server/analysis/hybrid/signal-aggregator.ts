@@ -37,10 +37,19 @@ export class SignalAggregator {
     const avgAiProb = aiSignals.length > 0 ? (aiSignals.reduce((sum, s) => sum + s.maliciousProbability, 0) / aiSignals.length) : 0;
     const totalVtDetections = osintSignals.find(s => s.source === "VirusTotal")?.maliciousCount || 0;
 
-    if (avgAiProb > 0.85 && totalVtDetections === 0) {
+    const isStealth = avgAiProb > 0.85 && totalVtDetections === 0;
+
+    if (isStealth) {
       anomalyFlags.push("STEALTH_THREAT_DETECTED");
-      // Boost score for stealth threats as they are highly dangerous zero-days
       finalRiskScore = Math.max(finalRiskScore, 85); 
+    }
+
+    // 🚀 NEW: Forensic Consistency Check (DNS vs WHOIS)
+    const hasDnsForensics = osintSignals.some(s => s.source === "WHOIS");
+    const hasDnsAnomalies = heuristics.some(h => h.name === "NO_MAIL_SERVER" || h.name === "HIGH_RISK_NAMESERVER");
+    if (hasDnsForensics && hasDnsAnomalies && finalRiskScore < 70) {
+      anomalyFlags.push("INFRASTRUCTURE_INCONSISTENCY");
+      finalRiskScore += 15; // Boost score for architectural red flags
     }
 
     // 4. Final Classification
