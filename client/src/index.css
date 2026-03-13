@@ -95,6 +95,42 @@
   mask-image: radial-gradient(circle at center, black, transparent 80%);
 }
 
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: minmax(100px, auto);
+  gap: 1.5rem;
+}
+
+.bento-item {
+  @apply glass-card rounded-[2rem] p-6 relative overflow-hidden;
+}
+
+.bento-item-large {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.bento-item-wide {
+  grid-column: span 2;
+}
+
+.bento-item-tall {
+  grid-row: span 2;
+}
+
+.satin-surface {
+  position: relative;
+}
+
+.satin-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+  pointer-events: none;
+}
+
 .premium-gradient-text {
   @apply bg-clip-text text-transparent bg-gradient-to-br from-white via-slate-200 to-slate-500 font-bold;
 }
