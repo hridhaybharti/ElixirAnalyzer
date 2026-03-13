@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Database, Microscope, Zap } from "lucide-react";
+import { Brain, Database, Microscope, Zap, Clock, ShieldCheck } from "lucide-react";
 
 interface SandboxSummaryProps {
   aiConfidence: number;
@@ -36,7 +36,7 @@ export function SandboxSummary({
       bar: "bg-blue-500"
     },
     {
-      name: "OSINT Intelligence",
+      name: "OSINT & DNS Intelligence",
       value: osintScore,
       icon: Database,
       color: "text-emerald-400",
@@ -54,9 +54,16 @@ export function SandboxSummary({
       )}
       
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-mono uppercase tracking-tighter flex items-center gap-2 text-slate-400">
-          <Zap className="w-4 h-4 text-amber-400" />
-          Hybrid Sandbox Intelligence
+        <CardTitle className="text-sm font-mono uppercase tracking-tighter flex items-center justify-between text-slate-400">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-400" />
+            Hybrid Sandbox Intelligence
+          </div>
+          {isStealth && (
+            <span className="text-[10px] text-rose-500 animate-pulse flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3" /> ZERO-DAY DETECTED
+            </span>
+          )}
         </CardTitle>
       </CardHeader>
 
@@ -78,29 +85,41 @@ export function SandboxSummary({
           ))}
         </div>
 
-        {anomalyFlags.length > 0 && (
-          <div className="pt-2 border-t border-slate-800/50">
-            <div className="text-[10px] uppercase text-slate-500 mb-2 font-bold tracking-widest">
-              Security Anomalies
+        <div className="pt-2 border-t border-slate-800/50 flex flex-col gap-3">
+          {anomalyFlags.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase text-slate-500 mb-2 font-bold tracking-widest">
+                Security Anomalies
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {anomalyFlags.map((flag) => (
+                  <Badge 
+                    key={flag} 
+                    variant="outline" 
+                    className="bg-rose-500/10 text-rose-400 border-rose-500/20 text-[10px] animate-in fade-in zoom-in duration-500"
+                  >
+                    <ShieldAlert className="w-3 h-3 mr-1" />
+                    {flag.replace(/_/g, ' ')}
+                  </Badge>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {anomalyFlags.map((flag) => (
-                <Badge 
-                  key={flag} 
-                  variant="outline" 
-                  className="bg-rose-500/10 text-rose-400 border-rose-500/20 text-[10px] animate-in fade-in zoom-in duration-500"
-                >
-                  <ShieldAlert className="w-3 h-3 mr-1" />
-                  {flag.replace(/_/g, ' ')}
-                </Badge>
-              ))}
+          )}
+          
+          <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3" /> SCAN_STAMP: {new Date().toLocaleTimeString()}
+            </div>
+            <div className="text-emerald-500/60 flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3" /> ENGINE_V3_ACTIVE
             </div>
           </div>
-        )}
+        </div>
       </CardContent>
     </Card>
   );
 }
+
 
 function ShieldAlert(props: any) {
   return (
