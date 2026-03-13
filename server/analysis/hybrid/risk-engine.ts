@@ -9,6 +9,8 @@ import { TLSService } from '../ssl/tls-fingerprint';
 import { ContentDriftService } from '../historical/content-drift';
 import { CampaignDNAEngine } from '../dna/campaign-tracker';
 import { ASNForensicService } from '../infrastructure/asn-lookup';
+import { BrandVisionService } from '../vision/brand-scanner';
+import { visualEngine } from '../visual-engine';
 
 export class HybridRiskEngine {
   static async analyze(type: "ip" | "domain" | "url", input: string): Promise<FinalAnalysisReport & { dnaMatch?: any }> {
@@ -29,6 +31,30 @@ export class HybridRiskEngine {
       type !== "ip" ? ContentDriftService.analyze(hostname) : Promise.resolve(null),
       ASNForensicService.analyze(hostname)
     ]);
+
+    // 🚀 Strike 2: Brand Vision AI (Visual Verification)
+    // We need the screenshot from the visual engine first
+    const captureId = Buffer.from(input).toString('hex').substring(0, 12);
+    const visualCapture = await visualEngine.captureSafeScreenshot(input, captureId);
+    
+    if (visualCapture.success && visualCapture.path) {
+      // Pass the relative path from the server root
+      const screenshotRelativePath = `server/data/screenshots/${captureId}.jpg`;
+      const visionSignal = await BrandVisionService.analyze(screenshotRelativePath, hostname);
+      
+      if (visionSignal) {
+        visionSignal.heuristics.forEach(h => heuristics.push({
+          name: h.name,
+          score: h.score,
+          description: h.description,
+          severity: 'critical'
+        }));
+      }
+
+      // Also add standard visual heuristics (password fields, etc.)
+      const standardVisual = visualEngine.getVisualHeuristics(visualCapture);
+      heuristics.push(...standardVisual.map(h => ({ ...h, severity: h.status as any })));
+    }
 
     // 3. Inject External Heuristics (DNS + IP Neighbor + TLS + Drift + ASN)
     if (dnsSignal) {
