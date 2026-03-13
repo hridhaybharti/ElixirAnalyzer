@@ -1,9 +1,10 @@
-import { resolveMx, resolveTxt, resolveNs } from 'dns/promises';
+import { resolveMx, resolveTxt, resolveNs, resolveSoa } from 'dns/promises';
 
 export interface DNSForensicSignal {
   mxRecords: string[];
   txtRecords: string[];
   nsRecords: string[];
+  soaRecord: any | null;
   heuristics: {
     name: string;
     score: number;
@@ -17,23 +18,47 @@ export class DNSForensicService {
       mxRecords: [],
       txtRecords: [],
       nsRecords: [],
+      soaRecord: null,
       heuristics: []
     };
 
     try {
-      const [mx, txt, ns] = await Promise.allSettled([
+      const [mx, txt, ns, soa] = await Promise.allSettled([
         resolveMx(hostname),
         resolveTxt(hostname),
-        resolveNs(hostname)
+        resolveNs(hostname),
+        resolveSoa(hostname)
       ]);
 
       if (mx.status === 'fulfilled') signal.mxRecords = mx.value.map(r => r.exchange);
       if (txt.status === 'fulfilled') signal.txtRecords = txt.value.flat();
       if (ns.status === 'fulfilled') signal.nsRecords = ns.value;
+      if (soa.status === 'fulfilled') signal.soaRecord = soa.value;
 
       // --- HEURISTICS ---
 
-      // 1. Missing Mail Server (Suspicious for corporate domains)
+      // 1. SOA Forensic: Administrative Credibility Check
+      if (signal.soaRecord && signal.soaRecord.hostmaster) {
+        const hostmaster = signal.soaRecord.hostmaster.toLowerCase();
+        const brands = ['paypal', 'microsoft', 'google', 'apple', 'bank', 'secure'];
+        const isOfficialBrandMatch = brands.some(b => hostname.includes(b));
+        
+        // If it's a brand lookalike but hostmaster is generic or suspicious
+        const isGenericEmail = hostmaster.includes('gmail') || 
+                               hostmaster.includes('outlook') || 
+                               hostmaster.includes('yandex') ||
+                               hostmaster.includes('proton');
+
+        if (isOfficialBrandMatch && isGenericEmail) {
+          signal.heuristics.push({
+            name: "SOA_ADMIN_CREDIBILITY_FAILURE",
+            score: 35,
+            description: `Domain mimics a major brand, but the SOA administrative contact (${hostmaster}) is a generic or suspicious address. High-fidelity Phishing indicator.`
+          });
+        }
+      }
+
+      // 2. Missing Mail Server (Suspicious for corporate domains)
       if (signal.mxRecords.length === 0) {
         signal.heuristics.push({
           name: "NO_MAIL_SERVER",
@@ -42,7 +67,7 @@ export class DNSForensicService {
         });
       }
 
-      // 2. SPF/DMARC Absence (Classic phishing indicator)
+      // 3. SPF/DMARC Absence (Classic phishing indicator)
       const hasSPF = signal.txtRecords.some(r => r.includes("v=spf1"));
       if (!hasSPF && signal.mxRecords.length > 0) {
         signal.heuristics.push({
@@ -52,7 +77,7 @@ export class DNSForensicService {
         });
       }
 
-      // 3. Bulletproof/High-Risk Nameservers
+      // 4. Bulletproof/High-Risk Nameservers
       const highRiskNS = ['cloudns.net', 'registrar-servers.com', 'dnspod.com', 'freenom.com'];
       const nsMatch = signal.nsRecords.some(ns => highRiskNS.some(risk => ns.toLowerCase().includes(risk)));
       if (nsMatch) {
