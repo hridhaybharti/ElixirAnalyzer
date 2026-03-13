@@ -171,6 +171,9 @@ export default function AnalysisResult() {
               <TabsTrigger value="heuristics">
                 Security Heuristics
               </TabsTrigger>
+              <TabsTrigger value="behavioral">
+                Behavioral Sandbox
+              </TabsTrigger>
               <TabsTrigger value="technical">
                 Technical Data
               </TabsTrigger>
@@ -192,6 +195,10 @@ export default function AnalysisResult() {
                   />
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="behavioral">
+              <BehavioralSandboxCard signals={details.threatIntelligence?.visualCapture?.visualSignals} />
             </TabsContent>
 
             <TabsContent value="technical" className="space-y-6">
@@ -602,6 +609,62 @@ function URLReputationCard({ reports }: { reports: any[] }) {
             <div className="text-sm text-slate-400">{r.details}</div>
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BehavioralSandboxCard({ signals }: { signals: any }) {
+  if (!signals || !signals.networkLog) {
+    return (
+      <Card className="border-slate-800 bg-slate-950/40">
+        <CardContent className="py-12 text-center text-slate-500">
+          <Globe className="w-12 h-12 mx-auto mb-4 opacity-20" />
+          <p>No behavioral data captured for this target.</p>
+          <p className="text-xs">Ensure VISUAL_CAPTURE_ENABLED is active.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-slate-800 bg-slate-950/40">
+        <CardHeader>
+          <CardTitle className="text-sm uppercase tracking-widest flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-400" />
+            Execution Timeline (Network Connections)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            {signals.networkLog.map((log: any, i: number) => (
+              <div key={i} className="flex items-start gap-3 p-2 rounded bg-slate-900/50 border border-slate-800/50 text-[11px] font-mono group hover:border-emerald-500/30 transition-colors">
+                <span className="text-slate-500">[{i.toString().padStart(2, '0')}]</span>
+                <span className="text-emerald-400 uppercase w-12">{log.method}</span>
+                <span className="text-slate-300 break-all flex-1">{log.url}</span>
+                <span className="text-slate-500 italic">{log.type}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatBox label="Hidden Iframes" value={signals.tinyIframeCount} color="text-rose-400" />
+        <StatBox label="Tracking Scripts" value={signals.trackingScriptCount} color="text-amber-400" />
+        <StatBox label="Password Fields" value={signals.hasPasswordField ? "DETECTED" : "NONE"} color={signals.hasPasswordField ? "text-rose-500" : "text-slate-500"} />
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value, color }: { label: string, value: any, color: string }) {
+  return (
+    <Card className="border-slate-800 bg-slate-900/30">
+      <CardContent className="p-4 text-center">
+        <div className="text-[10px] uppercase text-slate-500 font-bold mb-1">{label}</div>
+        <div className={`text-lg font-mono font-bold ${color}`}>{value}</div>
       </CardContent>
     </Card>
   );
