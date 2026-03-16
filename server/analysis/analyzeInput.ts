@@ -117,7 +117,7 @@ export async function analyzeInput(type: InputType, input: string) {
     if (/entropy|subdomain|url|path|obfuscation|length/.test(s)) return 'URL Structure';
     return 'General';
   }
-  const heuristicsDetailed = Array.isArray((report as any).heuristicsList) ? (report as any).heuristicsList.map(h => ({
+  const heuristicsDetailed = Array.isArray((report as any).heuristicsList) ? (report as any).heuristicsList.map((h: any) => ({
     name: h.name,
     status: h.severity === 'critical' || h.severity === 'high' ? 'fail' : (h.severity === 'medium' ? 'warn' : 'pass'),
     description: h.description,

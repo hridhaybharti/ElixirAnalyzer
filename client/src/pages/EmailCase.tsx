@@ -1,5 +1,5 @@
 import React from 'react';
-import { useRoute, Link } from 'wouter';
+import { useRoute, Link, useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 export default function EmailCase() {
   const [, params] = useRoute<{ id: string }>("/email/:id");
-  const [, setLocation] = Link.useLocation ? (Link as any).useLocation() : [null, ()=>{}];
+  const [, setLocation] = useLocation();
   const [data, setData] = React.useState<any | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
 

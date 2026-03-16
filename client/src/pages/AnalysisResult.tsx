@@ -197,7 +197,7 @@ export default function AnalysisResult() {
             </TabsContent>
 
             <TabsContent value="engines">
-              <EnginesTab engines={threatIntel?.engines} />
+              <EnginesTab engines={(threatIntel as any)?.engines} />
             </TabsContent>
 
             <TabsContent value="behavioral">
