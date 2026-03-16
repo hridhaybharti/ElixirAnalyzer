@@ -1,5 +1,5 @@
 import { analyzeInput } from "../../analysis/analyzeInput";
-import { mailParser } from "../mailparse";
+import { parseEmailSmart } from "../mailparse";
 
 /**
  * Unified Pipeline: Phish-to-Sandbox
@@ -10,8 +10,8 @@ export class PhishToSandboxBridge {
     console.log("[Phish-to-Sandbox] Initiating unified forensic sequence...");
     
     // 1. Parse Email for URLs
-    const parsed = await mailParser.parseRaw(emailContent);
-    const urls = parsed.links || [];
+    const parsed = await parseEmailSmart(emailContent);
+    const urls = parsed.urls || [];
 
     const results = [];
     
@@ -23,7 +23,7 @@ export class PhishToSandboxBridge {
         url,
         verdict: sandboxReport.riskLevel,
         score: sandboxReport.riskScore,
-        reportId: sandboxReport.id
+        reportId: (sandboxReport as any).id
       });
     }
 
