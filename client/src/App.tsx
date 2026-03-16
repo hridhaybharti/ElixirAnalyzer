@@ -7,6 +7,8 @@ import { Header } from "@/components/Header";
 import Dashboard from "@/pages/Dashboard";
 import AnalysisResult from "@/pages/AnalysisResult";
 import History from "@/pages/History";
+import EmailInbox from "@/pages/EmailInbox";
+import EmailCase from "@/pages/EmailCase";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -15,6 +17,8 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/analysis/:id" component={AnalysisResult} />
       <Route path="/history" component={History} />
+      <Route path="/email" component={EmailInbox} />
+      <Route path="/email/:id" component={EmailCase} />
       <Route component={NotFound} />
     </Switch>
   );

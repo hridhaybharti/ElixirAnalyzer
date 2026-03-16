@@ -15,14 +15,16 @@ import {
   ArrowLeft,
   Globe,
   ShieldAlert,
-  CheckCircle,
-  ExternalLink,
-  FileDown,
-} from "lucide-react";
+	  CheckCircle,
+	  ExternalLink,
+	  FileDown,
+	  Zap,
+	} from "lucide-react";
 
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import type { AnalysisDetails } from "@shared/schema";
+import { useHistory } from "@/hooks/use-analysis";
 
 /* =========================
    Main Page
@@ -64,6 +66,7 @@ export default function AnalysisResult() {
     statusColor = "text-emerald-500";
   }
 
+  const [tab, setTab] = React.useState('heuristics');
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <Button
@@ -158,6 +161,8 @@ export default function AnalysisResult() {
             osintScore={(details as any).osintScore || 0}
             anomalyFlags={(details as any).anomalyFlags || []}
           />
+
+          <TrendWidget input={analysis.input} />
         </motion.div>
 
         {/* RIGHT */}
@@ -166,10 +171,15 @@ export default function AnalysisResult() {
           animate={{ opacity: 1, x: 0 }}
           className="lg:col-span-2"
         >
-          <Tabs defaultValue="heuristics">
+          <CaseSummaryHeader analysis={analysis} details={details} setTab={setTab} />
+          <IOCPanel analysis={analysis} details={details} />
+          <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="mb-6">
               <TabsTrigger value="heuristics">
                 Security Heuristics
+              </TabsTrigger>
+              <TabsTrigger value="engines">
+                Engines
               </TabsTrigger>
               <TabsTrigger value="behavioral">
                 Behavioral Sandbox
@@ -177,28 +187,21 @@ export default function AnalysisResult() {
               <TabsTrigger value="technical">
                 Technical Data
               </TabsTrigger>
+              <TabsTrigger value="graph">
+                Graph
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="heuristics">
-              <Card className="border-slate-800">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-emerald-500" />
-                    Checks
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <HeuristicList
-                    heuristics={details.heuristics || []}
-                    riskContribution={details.risk_contribution}
-                    trustContribution={details.trust_contribution}
-                  />
-                </CardContent>
-              </Card>
+              <HeuristicsTab details={details} />
+            </TabsContent>
+
+            <TabsContent value="engines">
+              <EnginesTab engines={threatIntel?.engines} />
             </TabsContent>
 
             <TabsContent value="behavioral">
-              <BehavioralSandboxCard signals={details.threatIntelligence?.visualCapture?.visualSignals} />
+              <BehavioralSandboxCard capture={details.threatIntelligence?.visualCapture} />
             </TabsContent>
 
             <TabsContent value="technical" className="space-y-6">
@@ -242,6 +245,10 @@ export default function AnalysisResult() {
                   Threat intelligence data not yet available.
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="graph">
+              <GraphPivotCard analysis={analysis} />
             </TabsContent>
           </Tabs>
         </motion.div>
@@ -614,7 +621,8 @@ function URLReputationCard({ reports }: { reports: any[] }) {
   );
 }
 
-function BehavioralSandboxCard({ signals }: { signals: any }) {
+function BehavioralSandboxCard({ capture }: { capture: any }) {
+  const signals = capture?.visualSignals;
   if (!signals || !signals.networkLog) {
     return (
       <Card className="border-slate-800 bg-slate-950/40">
@@ -629,6 +637,24 @@ function BehavioralSandboxCard({ signals }: { signals: any }) {
 
   return (
     <div className="space-y-6">
+      {capture?.path && (
+        <Card className="border-slate-800 bg-slate-950/40">
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-widest flex items-center justify-between">
+              Screenshot
+              <a href={capture.path} target="_blank" rel="noreferrer" className="text-xs text-slate-400 hover:text-emerald-400 inline-flex items-center gap-1">
+                Open <ExternalLink className="w-3 h-3" />
+              </a>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded border border-slate-800 overflow-hidden bg-black/40">
+              <img src={capture.path} alt="Sandbox Screenshot" className="w-full object-contain" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-slate-800 bg-slate-950/40">
         <CardHeader>
           <CardTitle className="text-sm uppercase tracking-widest flex items-center gap-2">
@@ -668,6 +694,42 @@ function BehavioralSandboxCard({ signals }: { signals: any }) {
         <StatBox label="Tracking Scripts" value={signals.trackingScriptCount} color="text-amber-400" />
         <StatBox label="Password Fields" value={signals.hasPasswordField ? "DETECTED" : "NONE"} color={signals.hasPasswordField ? "text-rose-500" : "text-slate-500"} />
       </div>
+
+      {capture?.dynamicSignals && (
+        <Card className="border-slate-800 bg-slate-950/40">
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-widest">Dynamic Signals</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              {renderDynStat('fetch', 'Fetch', capture.dynamicSignals)}
+              {renderDynStat('xhr', 'XHR', capture.dynamicSignals)}
+              {renderDynStat('beacon', 'Beacon', capture.dynamicSignals)}
+              {renderDynStat('ws', 'WebSocket', capture.dynamicSignals)}
+              {renderDynStat('eval', 'eval()', capture.dynamicSignals)}
+              {renderDynStat('fn', 'Function()', capture.dynamicSignals)}
+              {renderDynStat('atob', 'atob()', capture.dynamicSignals)}
+            </div>
+            {renderTopExfil(capture.dynamicSignals)}
+          </CardContent>
+        </Card>
+      )}
+
+      {(capture?.har?.path) && (
+        <Card className="border-slate-800 bg-slate-950/40">
+          <CardHeader>
+            <CardTitle className="text-sm uppercase tracking-widest flex items-center justify-between">
+              HAR
+              <a href={capture.har.path} target="_blank" rel="noreferrer" className="text-xs text-slate-400 hover:text-emerald-400 inline-flex items-center gap-1">
+                Download <ExternalLink className="w-3 h-3" />
+              </a>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xs text-slate-400">HTTP Archive captured during detonation.</div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -678,6 +740,78 @@ function StatBox({ label, value, color }: { label: string, value: any, color: st
       <CardContent className="p-4 text-center">
         <div className="text-[10px] uppercase text-slate-500 font-bold mb-1">{label}</div>
         <div className={`text-lg font-mono font-bold ${color}`}>{value}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function renderDynStat(kind: string, label: string, dyn: any) {
+  const c = Array.isArray(dyn?.events) ? dyn.events.filter((e: any) => e?.t === kind).length : 0;
+  return <StatBox key={kind} label={label} value={c} color={c > 0 ? 'text-emerald-400' : 'text-slate-500'} />;
+}
+
+function renderTopExfil(dyn: any) {
+  const events: any[] = Array.isArray(dyn?.events) ? dyn.events : [];
+  const pageHost = String(dyn?.pageHost || '').toLowerCase();
+  const exfil = events.filter(e => (e?.t === 'fetch' || e?.t === 'xhr' || e?.t === 'beacon') && e?.url)
+    .map(e => ({ url: e.url, host: safeHost(e.url), t: e.t }))
+    .filter(x => !!x.host && pageHost && x.host !== pageHost)
+    .slice(0, 8);
+  if (exfil.length === 0) return null;
+  return (
+    <div>
+      <div className="text-xs text-slate-500 uppercase tracking-widest mb-2">Top Off-Origin Exfil</div>
+      <div className="space-y-1 text-[11px] font-mono">
+        {exfil.map((x, i) => (
+          <div key={i} className="flex items-center gap-2 p-1.5 rounded bg-slate-900/40 border border-slate-800/40">
+            <span className="text-emerald-400 uppercase w-12">{x.t}</span>
+            <span className="text-slate-300 break-all">{x.url}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function safeHost(u: string) {
+  try { return new URL(u).host.toLowerCase(); } catch { return ''; }
+}
+
+function EnginesTab({ engines }: { engines: any[] | undefined }) {
+  if (!engines || engines.length === 0) {
+    return (
+      <Card className="border-slate-800">
+        <CardContent className="py-8 text-center text-slate-500">
+          No external engine verdicts. Configure keys to enable multi-engine checks.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const colorFor = (v: string) =>
+    v === 'malicious' ? 'text-rose-400 bg-rose-500/10' : v === 'suspicious' ? 'text-amber-400 bg-amber-500/10' : 'text-emerald-400 bg-emerald-500/10';
+
+  return (
+    <Card className="border-slate-800">
+      <CardHeader>
+        <CardTitle className="text-sm uppercase tracking-widest">External Engines</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {engines.map((e, idx) => (
+          <div key={idx} className="flex items-center justify-between p-2 bg-slate-900 rounded text-sm">
+            <div className="text-slate-300 flex items-center gap-2">
+              <span>{e.engine}</span>
+              {e.link && (
+                <a href={e.link} target="_blank" rel="noreferrer" className="text-xs text-slate-400 hover:text-emerald-400 inline-flex items-center gap-1">
+                  Open <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+            <div className={`px-2 py-1 rounded text-xs font-mono ${colorFor(e.verdict)}`}>
+              {(e.verdict || 'unknown').toUpperCase()}
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
@@ -696,6 +830,255 @@ function InfoBlock({
       <div className="text-xs text-slate-500">{label}</div>
       <div className="text-slate-200">{value}</div>
     </div>
+  );
+}
+
+function GraphPivotCard({ analysis }: { analysis: any }) {
+  const input = analysis?.input || '';
+  const inputType = analysis?.type || 'domain';
+  const node = inputType === 'url' ? `url:${input}` : inputType === 'domain' ? `domain:${input}` : `ip:${input}`;
+  const [data, setData] = React.useState<any>(null);
+  React.useEffect(() => {
+    fetch(`/api/graph/pivot?node=${encodeURIComponent(node)}&depth=1`).then(r=>r.json()).then(setData).catch(()=>{});
+  }, [node]);
+  return (
+    <Card className="border-slate-800">
+      <CardHeader>
+        <CardTitle className="text-sm uppercase tracking-widest">Graph Pivot</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {!data ? (
+          <div className="text-slate-500 text-sm">No graph data.</div>
+        ) : (
+          <div className="space-y-2 text-sm">
+            <div className="text-slate-400">Center: <span className="font-mono text-slate-200">{data.center}</span></div>
+            <div className="text-slate-400">Nodes: {Array.isArray(data.nodes) ? data.nodes.length : 0}</div>
+            <div className="space-y-1">
+              {Array.isArray(data.edges) && data.edges.length > 0 ? data.edges.map((e: any, idx: number) => (
+                <div key={idx} className="p-2 rounded bg-slate-900 border border-slate-800 font-mono text-[11px]">
+                  {e.from}  --[{e.type}]--{'>'}  {e.to}
+                </div>
+              )) : <div className="text-slate-500 text-xs">No edges.</div>}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HeuristicsTab({ details }: { details: AnalysisDetails }) {
+  const all = details.heuristics || [];
+  const [q, setQ] = React.useState('');
+  const [sev, setSev] = React.useState<'all'|'fail'|'warn'|'pass'>('all');
+  const cats = Array.from(new Set(all.map(h => h.category || 'General'))).sort();
+  const [cat, setCat] = React.useState<string>('all');
+  const filtered = all.filter(h => {
+    const okSev = sev === 'all' ? true : h.status === sev;
+    const okQ = !q ? true : (h.name + ' ' + h.description).toLowerCase().includes(q.toLowerCase());
+    const okCat = cat === 'all' ? true : (h.category || 'General') === cat;
+    return okSev && okQ && okCat;
+  });
+
+  const counts = all.reduce((acc, h) => { acc[h.status] = (acc[h.status]||0)+1; return acc; }, {} as any);
+
+  const tagFor = (c?: string) => {
+    const s = (c||'').toLowerCase();
+    if (/(dns|tls|certificate|ct|protocol|port|network)/.test(s)) return 'Network';
+    if (/(infra|asn|infrastructure)/.test(s)) return 'Infra';
+    if (/(visual)/.test(s)) return 'Visual';
+    if (/(histor)/.test(s)) return 'Historical';
+    if (/(behavior|url|content|brand)/.test(s)) return 'Content';
+    return 'General';
+  };
+  const order = ['Network','Content','Infra','Visual','Historical','General'];
+  const grouped: Record<string, any[]> = {} as any;
+  filtered.forEach(h => { const k = tagFor(h.category); (grouped[k] ||= []).push(h); });
+
+  return (
+    <div className="space-y-4">
+      <TopSignals heuristics={all} />
+      <Card className="border-slate-800">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Security Heuristics</span>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-2 py-1 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">fail: {counts['fail']||0}</span>
+              <span className="px-2 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">warn: {counts['warn']||0}</span>
+              <span className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">pass: {counts['pass']||0}</span>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row gap-3 mb-4">
+            <input
+              value={q}
+              onChange={(e)=>setQ(e.target.value)}
+              placeholder="Search heuristics..."
+              className="flex-1 bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <div className="flex items-center gap-2">
+              {(['all','fail','warn','pass'] as const).map(k => (
+                <button key={k} onClick={()=>setSev(k)} className={`px-2 py-1 rounded text-xs border ${sev===k?'border-emerald-500/40 text-emerald-400':'border-slate-700 text-slate-400'} bg-slate-900 hover:border-emerald-500/40`}>
+                  {k}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button onClick={()=>setCat('all')} className={`px-2 py-1 rounded text-xs border ${cat==='all'?'border-emerald-500/40 text-emerald-400':'border-slate-700 text-slate-400'} bg-slate-900 hover:border-emerald-500/40`}>all</button>
+            {cats.map(c => (
+              <button key={c} onClick={()=>setCat(c)} className={`px-2 py-1 rounded text-xs border ${cat===c?'border-emerald-500/40 text-emerald-400':'border-slate-700 text-slate-400'} bg-slate-900 hover:border-emerald-500/40`}>{c}</button>
+            ))}
+          </div>
+          <HeuristicList
+            heuristics={filtered}
+            riskContribution={details.risk_contribution}
+            trustContribution={details.trust_contribution}
+          />
+        </CardContent>
+      </Card>
+      {order.map(group => (
+        (grouped[group]?.length > 0) ? (
+          <Card key={group} className="border-slate-800 bg-slate-950/30">
+            <CardHeader>
+              <CardTitle className="text-sm uppercase tracking-widest">{group}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <HeuristicList heuristics={grouped[group]} />
+            </CardContent>
+          </Card>
+        ) : null
+      ))}
+    </div>
+  );
+}
+
+function TopSignals({ heuristics }: { heuristics: any[] }) {
+  if (!heuristics?.length) return null;
+  const top = [...heuristics]
+    .sort((a,b) => (b.status==='fail'?1:0)-(a.status==='fail'?1:0) || (b.scoreImpact||0)-(a.scoreImpact||0))
+    .slice(0, 3);
+  return (
+    <Card className="border-slate-800 bg-slate-950/40">
+      <CardContent className="p-4">
+        <div className="text-xs uppercase text-slate-500 tracking-widest mb-2">Top Signals</div>
+        <div className="grid md:grid-cols-3 gap-3">
+          {top.map((t, i) => (
+            <div key={i} className="p-3 rounded border border-slate-800 bg-slate-900/40">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-slate-200 text-sm font-medium truncate" title={t.name}>{t.name}</div>
+                <span className={`text-xs font-mono ${t.status==='fail'?'text-rose-400':t.status==='warn'?'text-amber-400':'text-emerald-400'}`}>{t.status.toUpperCase()}</span>
+              </div>
+              <div className="text-[11px] text-slate-400 line-clamp-2" title={t.description}>{t.description}</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CaseSummaryHeader({ analysis, details, setTab }: { analysis: any; details: AnalysisDetails; setTab: (t:string)=>void }) {
+  const top = (details.heuristics || []).slice(0,3);
+  return (
+    <Card className="border-slate-800 bg-slate-950/60 backdrop-blur sticky top-0 z-10 mb-6">
+      <CardContent className="p-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase text-slate-500 tracking-widest">Case Summary</div>
+            <div className="text-slate-200 text-lg font-semibold">{analysis.input}</div>
+            <div className="flex gap-2 mt-2">
+              {top.map((t:any,i:number)=> (
+                <span key={i} className={`text-xs px-2 py-1 rounded border ${t.status==='fail'?'border-rose-500/30 text-rose-300 bg-rose-500/10':t.status==='warn'?'border-amber-500/30 text-amber-300 bg-amber-500/10':'border-emerald-500/30 text-emerald-300 bg-emerald-500/10'}`} title={t.description}>
+                  {t.name}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="border-slate-700" onClick={()=>setTab('graph')}>Pivot Graph</Button>
+            <Button variant="outline" className="border-slate-700" onClick={()=>setTab('engines')}>Engines</Button>
+            <Button onClick={()=>window.open(`/api/analysis/${analysis.id}/export`, '_blank')} className="bg-slate-800 hover:bg-slate-700 text-white border border-white/5">Export PDF</Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function IOCPanel({ analysis, details }: { analysis: any; details: AnalysisDetails }) {
+  const items: Array<{ label: string; value?: string; copy?: string; link?: string }> = [];
+  const type = details?.metadata?.inputType || analysis?.type;
+  const input = analysis?.input;
+  if (input) items.push({ label: type?.toUpperCase() || 'Input', value: input, copy: input });
+  const vt = (details as any)?.threatIntelligence?.virusTotal;
+  if (vt?.id) items.push({ label: 'VT ID', value: vt.id, copy: vt.id, link: vt.permalink });
+  const whois = (details as any)?.threatIntelligence?.whoisData;
+  if (whois?.domain) items.push({ label: 'Domain', value: whois.domain, copy: whois.domain });
+  const ipRep = (details as any)?.threatIntelligence?.ipReputation;
+  if (ipRep?.ip) items.push({ label: 'IP', value: ipRep.ip, copy: ipRep.ip });
+  const vis = (details as any)?.threatIntelligence?.visualCapture;
+  if (vis?.path) items.push({ label: 'Screenshot', value: vis.path, copy: vis.path, link: vis.path });
+  const har = vis?.har?.path || (vis?.harPath);
+  if (har) items.push({ label: 'HAR', value: har, copy: har, link: har });
+  const ct = (details as any)?.threatIntelligence?.ctLogs || (details as any)?.threatIntelligence?.ctlog;
+  const fps: string[] = Array.isArray(ct?.certFingerprints) ? ct.certFingerprints : [];
+  if (fps.length > 0) fps.slice(0,3).forEach((fp: string, i: number) => items.push({ label: `Cert FP #${i+1}`, value: fp, copy: fp }));
+
+  const onCopy = async (v?: string) => { if (!v) return; try { await navigator.clipboard.writeText(v); } catch {} };
+
+  return (
+    <Card className="border-slate-800 bg-slate-950/30 mb-6">
+      <CardContent className="p-4">
+        <div className="text-xs uppercase text-slate-500 tracking-widest mb-2">IOCs</div>
+        {items.length === 0 ? (
+          <div className="text-slate-500 text-sm">No indicators available.</div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-3">
+            {items.map((it, idx) => (
+              <div key={idx} className="p-3 rounded border border-slate-800 bg-slate-900/40 flex items-center justify-between gap-3">
+                <div className="min-w-24 text-xs uppercase text-slate-500">{it.label}</div>
+                <div className="flex-1 text-slate-200 truncate" title={it.value}>{it.value}</div>
+                <div className="flex items-center gap-2">
+                  {it.link && (
+                    <a href={it.link} target="_blank" rel="noreferrer" className="text-xs text-slate-400 hover:text-emerald-400">Open</a>
+                  )}
+                  {it.copy && (
+                    <button onClick={()=>onCopy(it.copy)} className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-300 hover:border-emerald-500/40">Copy</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TrendWidget({ input }: { input: string }) {
+  const { data } = useHistory();
+  const items = Array.isArray(data) ? data.filter((x:any) => x.input === input).slice(-10) : [];
+  if (items.length < 2) return null;
+  const min = Math.min(...items.map((i:any)=>i.riskScore));
+  const max = Math.max(...items.map((i:any)=>i.riskScore));
+  const range = Math.max(1, max - min);
+  return (
+    <Card className="border-slate-800">
+      <CardHeader>
+        <CardTitle className="text-sm uppercase tracking-widest">Risk Trend (last {items.length})</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-16 flex items-end gap-1">
+          {items.map((it:any, idx:number) => {
+            const h = 12 + Math.round(((it.riskScore - min) / range) * 52);
+            const cls = it.riskLevel?.toLowerCase().includes('critical') || it.riskScore>=90 ? 'bg-rose-500' : it.riskScore>=70 ? 'bg-rose-400' : it.riskScore>=30 ? 'bg-amber-400' : 'bg-emerald-400';
+            return <div key={idx} title={`${it.riskScore} (${new Date(it.createdAt).toLocaleString()})`} className={`w-3 ${cls} rounded`} style={{height: `${h}px`}}/>;
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

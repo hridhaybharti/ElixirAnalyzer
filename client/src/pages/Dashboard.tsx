@@ -23,11 +23,12 @@ import {
   Link as LinkIcon,
   Search,
   Loader2,
-  RotateCcw,
-  CheckCircle,
-  AlertCircle,
-  Database,
-} from "lucide-react";
+	  RotateCcw,
+	  CheckCircle,
+	  AlertCircle,
+	  Database,
+	  Zap,
+	} from "lucide-react";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -263,5 +264,4 @@ export default function Dashboard() {
       </div>
     </div>
   );
-}
 }

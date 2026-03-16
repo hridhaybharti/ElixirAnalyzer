@@ -1,5 +1,3 @@
-import tldextract from 'tldextract';
-
 export interface ExtractedFeatures {
   urlLength: number;
   subdomainCount: number;
@@ -12,6 +10,16 @@ export interface ExtractedFeatures {
 
 export class FeatureExtractor {
   private static brands = ['paypal', 'google', 'microsoft', 'apple', 'amazon', 'netflix', 'bankofamerica', 'chase', 'wellsfargo'];
+  private static COMMON_2PART_TLDS = new Set([
+    'co.uk', 'org.uk', 'ac.uk', 'gov.uk',
+    'com.au', 'net.au', 'org.au',
+    'co.in',
+    'com.br',
+    'com.mx',
+    'co.jp',
+    'co.kr',
+    'co.nz',
+  ]);
 
   static extract(input: string): ExtractedFeatures {
     let url: URL;
@@ -24,13 +32,16 @@ export class FeatureExtractor {
 
     const hostname = url.hostname;
     const path = url.pathname;
-    const tldInfo = tldextract(hostname);
+    const tld = this.extractTld(hostname);
+    const hostParts = hostname.split('.').filter(Boolean);
+    const tldParts = tld ? tld.split('.').length : 1;
+    const subdomainCount = Math.max(0, hostParts.length - (tldParts + 1));
 
     return {
       urlLength: input.length,
-      subdomainCount: hostname.split('.').length - 2,
+      subdomainCount,
       pathDepth: path.split('/').filter(p => p.length > 0).length,
-      tld: tldInfo.tld,
+      tld,
       entropyScore: this.calculateEntropy(hostname),
       specialCharCount: (input.match(/[@%&=?#_]/g) || []).length,
       brandKeywords: this.detectBrands(hostname)
@@ -38,15 +49,28 @@ export class FeatureExtractor {
   }
 
   private static extractFromRaw(domain: string): ExtractedFeatures {
+    const tld = this.extractTld(domain);
+    const hostParts = domain.split('.').filter(Boolean);
+    const tldParts = tld ? tld.split('.').length : 1;
+    const subdomainCount = Math.max(0, hostParts.length - (tldParts + 1));
     return {
       urlLength: domain.length,
-      subdomainCount: domain.split('.').length - 2,
+      subdomainCount,
       pathDepth: 0,
-      tld: domain.split('.').pop() || '',
+      tld,
       entropyScore: this.calculateEntropy(domain),
       specialCharCount: (domain.match(/[@%&=?#_]/g) || []).length,
       brandKeywords: this.detectBrands(domain)
     };
+  }
+
+  private static extractTld(hostname: string): string {
+    const parts = hostname.split('.').map(p => p.trim()).filter(Boolean);
+    if (parts.length < 2) return '';
+
+    const lastTwo = parts.slice(-2).join('.').toLowerCase();
+    if (this.COMMON_2PART_TLDS.has(lastTwo) && parts.length >= 3) return lastTwo;
+    return parts[parts.length - 1].toLowerCase();
   }
 
   private static calculateEntropy(str: string): number {

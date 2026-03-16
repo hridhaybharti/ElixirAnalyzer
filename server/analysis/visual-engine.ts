@@ -19,10 +19,14 @@ class VisualEngine {
     "data",
     "screenshots",
   );
+  private harDir = path.join(process.cwd(), "server", "data", "har");
 
   private constructor() {
     if (!fs.existsSync(this.screenshotDir)) {
       fs.mkdirSync(this.screenshotDir, { recursive: true });
+    }
+    if (!fs.existsSync(this.harDir)) {
+      fs.mkdirSync(this.harDir, { recursive: true });
     }
   }
 
@@ -54,18 +58,116 @@ class VisualEngine {
       const require = createRequire(import.meta.url);
       const { chromium } = require("playwright") as any;
       const browser = await chromium.launch({ headless: true });
+      const harEnabled = process.env.DYN_CAPTURE_HAR === "1";
+      const harFile = path.join(this.harDir, `${id}.har`);
       const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
         userAgent:
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        ...(harEnabled ? { recordHar: { path: harFile, content: 'embed' } } : {}),
       });
       
       const page = await context.newPage();
+
+      // Optional dynamic JS instrumentation
+      const dynEnabled = process.env.DYN_JS_INSTRUMENT === "1";
+      if (dynEnabled) {
+        await page.addInitScript(() => {
+          try {
+            (window as any).__ea_events = [] as any[];
+            const push = (e: any) => {
+              try {
+                const arr = (window as any).__ea_events as any[];
+                if (Array.isArray(arr) && arr.length < 200) arr.push(e);
+              } catch {}
+            };
+
+            // fetch
+            const _fetch = window.fetch;
+            window.fetch = async function(input: any, init?: any) {
+              const url = (typeof input === 'string') ? input : (input?.url || '');
+              const method = (init?.method || 'GET').toUpperCase();
+              const bodyLen = (init?.body && typeof init.body === 'string') ? (init.body as string).length : undefined;
+              push({ t: 'fetch', url, method, bl: bodyLen });
+              // @ts-ignore
+              return (_fetch as any).apply(null, arguments as any);
+            } as any;
+
+            // XHR
+            const _open = XMLHttpRequest.prototype.open;
+            const _send = XMLHttpRequest.prototype.send;
+            (XMLHttpRequest.prototype as any).open = function(method: string, url: string) {
+              (this as any).__ea_url = url;
+              (this as any).__ea_method = String(method || 'GET').toUpperCase();
+              return _open.apply(this, arguments as any);
+            };
+            (XMLHttpRequest.prototype as any).send = function(body?: any) {
+              try {
+                const url = (this as any).__ea_url || '';
+                const method = (this as any).__ea_method || 'GET';
+                const bl = typeof body === 'string' ? body.length : undefined;
+                push({ t: 'xhr', url, method, bl });
+              } catch {}
+              return _send.apply(this, arguments as any);
+            };
+
+            // Beacon
+            const _beacon = navigator.sendBeacon?.bind(navigator);
+            if (_beacon) {
+              (navigator as any).sendBeacon = function(url: string, data?: any) {
+                try { push({ t: 'beacon', url, method: 'BEACON', bl: (typeof data === 'string' ? data.length : undefined) }); } catch {}
+                return _beacon(url, data);
+              };
+            }
+
+            // WebSocket
+            const _WS = window.WebSocket;
+            (window as any).WebSocket = function(url: string, protocols?: string | string[]) {
+              try { push({ t: 'ws', url }); } catch {}
+              // @ts-ignore
+              return new _WS(url, protocols as any);
+            } as any;
+
+            // Obfuscation indicators
+            const _eval = window.eval;
+            window.eval = function(code: string) {
+              try { push({ t: 'eval' }); } catch {}
+              // @ts-ignore
+              return (_eval as any).call(null, code);
+            } as any;
+
+            const _Function = (window as any).Function;
+            (window as any).Function = function(...args: any[]) {
+              try { push({ t: 'fn' }); } catch {}
+              // @ts-ignore
+              return new _Function(...args);
+            } as any;
+
+            const _atob = window.atob;
+            window.atob = function(data: string) {
+              try { push({ t: 'atob' }); } catch {}
+              return _atob.call(this, data);
+            };
+
+            // Minimal DOM locks detection
+            try {
+              const origAdd = EventTarget.prototype.addEventListener;
+              (EventTarget.prototype as any).addEventListener = function(type: string, listener: any, options?: any) {
+                if (type === 'contextmenu' || type === 'keydown') {
+                  push({ t: 'domlock', evt: type });
+                }
+                return origAdd.call(this, type, listener, options);
+              };
+            } catch {}
+          } catch {}
+        });
+      }
       
       // Strict 15s timeout for safety
+      const navTimeout = Math.max(1000, Math.min(60000, Number(process.env.DYN_TIMEOUT_MS || 15000)));
       await page.goto(validated.url.toString(), {
         waitUntil: "networkidle",
-        timeout: 15000,
+        timeout: navTimeout,
       });
       
       const filename = `${id}.jpg`;
@@ -138,6 +240,25 @@ class VisualEngine {
 
       // Stay alive for a few more seconds to catch late-loading threats
       await page.waitForTimeout(3000);
+
+      // Pull dynamic instrumentation data
+      let dynamicSignals: any = null;
+      if (dynEnabled) {
+        try {
+          dynamicSignals = await page.evaluate(() => {
+            const events = Array.isArray((window as any).__ea_events) ? (window as any).__ea_events.slice(0, 200) : [];
+            const pageUrl = location.href;
+            const pageHost = location.host;
+            const forms = Array.from(document.forms || []).map(f => {
+              const hasPw = !!f.querySelector('input[type="password"]');
+              const act = (f.getAttribute('action') || '').trim();
+              return { action: act, hasPassword: hasPw };
+            });
+            const cmBlocked = !!(document as any).oncontextmenu;
+            return { events, forms, pageUrl, pageHost, cmBlocked };
+          });
+        } catch {}
+      }
       
       await browser.close();
 
@@ -154,7 +275,9 @@ class VisualEngine {
           trackingScriptCount: trackingScripts,
           networkLog: mappedNetworkLog,
           wasRecursive: wasRedirectedByAI
-        }
+        },
+        dynamicSignals
+        , har: (process.env.DYN_CAPTURE_HAR === "1") ? { path: `/api/har/${id}.har` } : undefined
       };
     } catch (error: any) {
       console.warn(
@@ -211,6 +334,7 @@ class VisualEngine {
 
     const signals: HeuristicResult[] = [];
     const { visualSignals } = captureResult;
+    const dyn = captureResult.dynamicSignals || null;
 
     if (visualSignals.hasPasswordField) {
       signals.push({
@@ -239,6 +363,89 @@ class VisualEngine {
         description: "Unusually high number of tracking/analytics scripts detected. Often used for traffic laundering.",
         scoreImpact: 10
       });
+    }
+
+    // Dynamic JS signals (if available)
+    if (dyn) {
+      const pageHost = String(dyn.pageHost || '').toLowerCase();
+      const urlHost = (u: string) => {
+        try { return new URL(u).host.toLowerCase(); } catch { return ''; }
+      };
+
+      // Off-origin exfil events
+      const exfil = (Array.isArray(dyn.events) ? dyn.events : []).filter((e: any) => {
+        if (!e || !e.url) return false;
+        const h = urlHost(e.url);
+        return h && pageHost && h !== pageHost && (e.t === 'fetch' || e.t === 'xhr' || e.t === 'beacon');
+      });
+
+      if (exfil.length >= 3) {
+        signals.push({
+          name: "High-volume Off-Origin Exfiltration",
+          status: "warn",
+          description: `Detected ${exfil.length} network exfiltration events to off-origin hosts during detonation.`,
+          scoreImpact: 25
+        });
+      } else if (exfil.length > 0) {
+        signals.push({
+          name: "Off-Origin Exfiltration",
+          status: "warn",
+          description: `Detected ${exfil.length} network exfiltration event(s) to off-origin hosts during detonation.`,
+          scoreImpact: 12
+        });
+      }
+
+      // Credential POSTs to off-origin
+      const credsOffOrigin = (Array.isArray(dyn.forms) ? dyn.forms : []).some((f: any) => {
+        if (!f?.hasPassword) return false;
+        const act = String(f.action || '');
+        if (!act) return false; // empty action defaults to same-origin
+        const ah = urlHost(act);
+        return ah && pageHost && ah !== pageHost;
+      });
+      if (credsOffOrigin) {
+        signals.push({
+          name: "Off-Origin Credential Post",
+          status: "fail",
+          description: "Password form action points to a different host than the page origin (common phishing pattern).",
+          scoreImpact: 35
+        });
+      }
+
+      // Obfuscation bursts
+      const evalCount = (dyn.events || []).filter((e: any) => e?.t === 'eval').length;
+      const fnCount = (dyn.events || []).filter((e: any) => e?.t === 'fn').length;
+      const atobCount = (dyn.events || []).filter((e: any) => e?.t === 'atob').length;
+      const obCount = evalCount + fnCount + atobCount;
+      if (obCount >= 10) {
+        signals.push({
+          name: "Aggressive Script Obfuscation",
+          status: "warn",
+          description: `High frequency of dynamic code execution indicators (eval/Function/atob: ${obCount}).`,
+          scoreImpact: 15
+        });
+      }
+
+      // WebSocket beacon to off-origin
+      const wsOff = (dyn.events || []).some((e: any) => e?.t === 'ws' && urlHost(e.url) && urlHost(e.url) !== pageHost);
+      if (wsOff) {
+        signals.push({
+          name: "WebSocket Beacon",
+          status: "warn",
+          description: "Detected WebSocket connection to off-origin during detonation.",
+          scoreImpact: 10
+        });
+      }
+
+      // DOM locks
+      if (dyn.cmBlocked || (dyn.events || []).some((e: any) => e?.t === 'domlock')) {
+        signals.push({
+          name: "UI Interaction Restrictions",
+          status: "warn",
+          description: "Detected right-click or keydown event interception (user interaction restrictions).",
+          scoreImpact: 8
+        });
+      }
     }
 
     return signals;

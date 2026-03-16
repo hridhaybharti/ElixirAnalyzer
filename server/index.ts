@@ -5,9 +5,14 @@ import { serveStatic } from "./static";
 import { setupVite } from "./vite";
 import { createServer } from "http";
 import { reputationService } from "./analysis/reputation";
-import { OIDCHandshake } from "./auth/oidc-handshake";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import { initObservability } from './observability/otel';
+import { metrics } from './observability/metrics';
+import { renderPrometheus } from './observability/prom';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 const app = express();
 
@@ -37,6 +42,36 @@ const limiter = rateLimit({
 
 app.use("/api/", limiter);
 app.use(requireApiKey);
+
+// Tighter limiter for email analysis endpoints
+const emailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.EMAIL_RATE_MAX || 30),
+  message: { message: "Too many email analyses, please slow down" }
+});
+app.use("/api/email", emailLimiter);
+
+// Request ID + per-key quotas middleware
+const QUOTA = Number(process.env.QUOTA_PER_15MIN || 500);
+const windowMs = 15 * 60 * 1000;
+const keyWindow: Record<string, { start: number; count: number }> = {};
+app.use((req, res, next) => {
+  // Request ID
+  const reqId = crypto.randomUUID();
+  (req as any).reqId = reqId;
+  res.setHeader('x-request-id', reqId);
+  // Per-key quota
+  const key = String(req.header('x-api-key') || req.ip || 'public');
+  const now = Date.now();
+  const w = keyWindow[key] || { start: now, count: 0 };
+  if (now - w.start > windowMs) { w.start = now; w.count = 0; }
+  w.count += 1;
+  keyWindow[key] = w;
+  if (w.count > QUOTA) {
+    return res.status(429).json({ message: 'Quota exceeded. Try later.' });
+  }
+  next();
+});
 
 const httpServer = createServer(app);
 
@@ -79,6 +114,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
+      try { metrics.recordRequest(req.method, path, res.statusCode, duration); } catch {}
     }
   });
 
@@ -86,10 +122,40 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await initObservability();
   // Initialize Reputation Service (Background Sync)
   reputationService.init().catch(err => {
     console.error("[Startup] ReputationService init failed:", err);
   });
+
+  // Background: raw EML retention cleanup (if enabled)
+  (function scheduleRawEmailCleanup(){
+    const days = Number(process.env.EMAIL_RAW_TTL_DAYS || 0);
+    if (!days || !Number.isFinite(days) || days <= 0) return;
+    const intervalMs = 6 * 60 * 60 * 1000; // every 6 hours
+    const rawDir = path.resolve(process.cwd(), 'server', 'data', 'email', 'raw');
+    const cleanup = () => {
+      try {
+        if (!fs.existsSync(rawDir)) return;
+        const now = Date.now();
+        const ttlMs = days * 24 * 60 * 60 * 1000;
+        for (const f of fs.readdirSync(rawDir)) {
+          const full = path.join(rawDir, f);
+          try {
+            const st = fs.statSync(full);
+            if (st.isFile() && (now - st.mtimeMs) > ttlMs) {
+              fs.unlinkSync(full);
+            }
+          } catch {}
+        }
+      } catch (e) {
+        console.warn('[retention] raw email cleanup error:', (e as any)?.message || e);
+      }
+    };
+    // initial delay
+    setTimeout(cleanup, 30 * 1000);
+    setInterval(cleanup, intervalMs);
+  })();
 
   // Register API routes
   await registerRoutes(httpServer, app);
@@ -113,6 +179,19 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   } else {
     serveStatic(app);
+  }
+
+  if (process.env.METRICS_ENABLED === '1') {
+    app.get('/api/metrics', (_req: Request, res: Response) => {
+      res.json(metrics.snapshot());
+    });
+  }
+
+  if (process.env.PROMETHEUS_ENABLED === '1') {
+    app.get('/metrics', (_req: Request, res: Response) => {
+      res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+      res.send(renderPrometheus(metrics.snapshot()));
+    });
   }
 
   // -------------------------------

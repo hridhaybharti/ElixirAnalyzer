@@ -2,6 +2,16 @@ import { CheckCircle2, AlertTriangle, XCircle, Shield, TrendingUp, TrendingDown 
 import { type HeuristicResult } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 
+function tagForCategory(cat?: string): { label: string; cls: string } {
+  const c = (cat || 'General').toLowerCase();
+  if (/(dns|tls|certificate|ct|protocol|port|network)/.test(c)) return { label: 'Network', cls: 'border-cyan-500/30 text-cyan-300 bg-cyan-500/10' };
+  if (/(behavior|url|content|brand|visual)/.test(c)) return { label: 'Content', cls: 'border-amber-500/30 text-amber-300 bg-amber-500/10' };
+  if (/(infra|asn|infrastructure)/.test(c)) return { label: 'Infra', cls: 'border-purple-500/30 text-purple-300 bg-purple-500/10' };
+  if (/(visual)/.test(c)) return { label: 'Visual', cls: 'border-pink-500/30 text-pink-300 bg-pink-500/10' };
+  if (/(histor)/.test(c)) return { label: 'Historical', cls: 'border-slate-500/30 text-slate-300 bg-slate-500/10' };
+  return { label: 'General', cls: 'border-slate-600/30 text-slate-300 bg-slate-600/10' };
+}
+
 interface HeuristicListProps {
   heuristics: HeuristicResult[];
   riskContribution?: number;
@@ -60,6 +70,14 @@ export function HeuristicList({ heuristics, riskContribution = 0, trustContribut
               <div className="flex items-center justify-between mb-1">
                 <h4 className="font-medium text-slate-200">{h.name}</h4>
                 <div className="flex items-center gap-2">
+                  {h.category && (
+                    <Badge variant="outline" className="uppercase text-[9px] tracking-wider border-slate-600/50 text-slate-300">
+                      {h.category}
+                    </Badge>
+                  )}
+                  <Badge variant="outline" className={`uppercase text-[9px] tracking-wider ${tagForCategory(h.category).cls}`}>
+                    {tagForCategory(h.category).label}
+                  </Badge>
                   <Badge variant="outline" className={`
                     uppercase text-[10px] tracking-wider font-mono
                     ${h.status === 'pass' ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/10' : ''}

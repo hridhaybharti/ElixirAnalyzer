@@ -18,6 +18,7 @@ export const heuristicResultSchema = z.object({
   status: z.enum(["pass", "warn", "fail"]),
   description: z.string(),
   scoreImpact: z.number(),
+  category: z.string().optional(),
   riskContribution: z.number().optional(),
   trustContribution: z.number().optional(),
 });
@@ -142,12 +143,14 @@ export const analysisDetailsSchema = z.object({
   trust_contribution: z.number().optional(),
   signal_count: z.number().optional(),
   threatIntelligence: threatIntelligenceSchema.optional(),
-  metadata: z.object({
-    inputType: z.enum(["ip", "domain", "url"]),
-    sanitizedInput: z.string(),
-    hasCorrelations: z.boolean(),
-  }).optional(),
-});
+	  metadata: z.object({
+	    inputType: z.enum(["ip", "domain", "url"]),
+	    sanitizedInput: z.string(),
+	    hasCorrelations: z.boolean(),
+	    processingTimeMs: z.number().optional(),
+	    isStealthThreat: z.boolean().optional(),
+	  }).optional(),
+	});
 
 export type AnalysisDetails = z.infer<typeof analysisDetailsSchema>;
 

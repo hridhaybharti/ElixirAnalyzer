@@ -1,0 +1,39 @@
+version: '3.9'
+services:
+  app:
+    build: .
+    image: elixir-analyzer:latest
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      API_KEY: ${API_KEY:-}
+      QUOTA_PER_15MIN: ${QUOTA_PER_15MIN:-500}
+      # Sandbox + engines
+      SANDBOX: ${SANDBOX:-0}
+      SANDBOX_ALLOW_HOSTS: ${SANDBOX_ALLOW_HOSTS:-www.virustotal.com,api.abuseipdb.com,ipapi.co,ipwho.is,ip-api.com,safebrowsing.googleapis.com,urlscan.io,checkurl.phishtank.com}
+      VISUAL_CAPTURE_ENABLED: ${VISUAL_CAPTURE_ENABLED:-0}
+      DYN_JS_INSTRUMENT: ${DYN_JS_INSTRUMENT:-0}
+      DYN_CAPTURE_HAR: ${DYN_CAPTURE_HAR:-0}
+      DYN_TIMEOUT_MS: ${DYN_TIMEOUT_MS:-15000}
+      MULTI_ENGINE_ENABLED: ${MULTI_ENGINE_ENABLED:-1}
+      GSB_API_KEY: ${GSB_API_KEY:-}
+      PHISHTANK_APP_KEY: ${PHISHTANK_APP_KEY:-}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      # Queue
+      REDIS_URL: redis://redis:6379
+      # Files
+      YARA_ENABLED: ${YARA_ENABLED:-0}
+      YARA_RULES_DIR: /app/server/files/rules
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-0}
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+    volumes:
+      - ./server/files/rules:/app/server/files/rules:ro
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"

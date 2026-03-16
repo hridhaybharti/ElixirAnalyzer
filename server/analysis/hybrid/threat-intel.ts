@@ -1,5 +1,5 @@
 import { osintService } from "../osint-engine";
-import { lookupWhoisData, checkURLReputation, type WhoisData } from "../threat-intelligence";
+import { lookupWhoisData, checkURLReputation } from "../threat-intelligence";
 
 export interface OSINTSignal {
   source: string;
@@ -57,17 +57,17 @@ export class ThreatIntelService {
           });
         }
 
-        if (whoisData) {
-          // Domain age logic as a signal
-          const isNew = whoisData.age < 30;
-          signals.push({
-            source: "WHOIS",
-            maliciousCount: isNew ? 1 : 0,
-            totalEngines: 1,
-            reputationScore: isNew ? 70 : 0, // High score for brand new domains
-            metadata: { ageDays: whoisData.age, registrar: whoisData.registrar }
-          });
-        }
+	        if (whoisData) {
+	          // Domain age logic as a signal
+	          const isNew = whoisData.ageInDays < 30;
+	          signals.push({
+	            source: "WHOIS",
+	            maliciousCount: isNew ? 1 : 0,
+	            totalEngines: 1,
+	            reputationScore: isNew ? 70 : 0, // High score for brand new domains
+	            metadata: { ageDays: whoisData.ageInDays, registrar: whoisData.registrar }
+	          });
+	        }
       }
     } catch (error) {
       console.error("[ThreatIntel] OSINT gathering failed:", error);

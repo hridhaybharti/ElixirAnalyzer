@@ -1,5 +1,3 @@
-import { pipeline } from '@xenova/transformers';
-
 export interface ScanFingerprint {
   id: string;
   vector: number[];
@@ -15,11 +13,36 @@ export class CampaignDNAEngine {
   private static fingerprintStore: ScanFingerprint[] = [];
   // Lightweight feature-extraction model
   private static MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
+  private static pipelineFn: any = null;
+  private static pipelineLoadError: unknown = null;
+
+  private static async loadPipeline() {
+    if (this.pipelineFn) return this.pipelineFn;
+    if (this.pipelineLoadError) throw this.pipelineLoadError;
+
+    try {
+      const pkg = '@xenova/transformers';
+      const mod = (await import(pkg as any)) as any;
+      if (!mod?.pipeline) throw new Error(`Missing export 'pipeline' from ${pkg}`);
+      this.pipelineFn = mod.pipeline;
+      return this.pipelineFn;
+    } catch (err) {
+      this.pipelineLoadError = err;
+      throw err;
+    }
+  }
 
   private static async init() {
-    if (!this.classifier) {
+    if (this.embedder) return;
+
+    try {
       console.log(`[CampaignDNA] Initializing DNA Embedder: ${this.MODEL_NAME}...`);
+      const pipeline = await this.loadPipeline();
       this.embedder = await pipeline('feature-extraction', this.MODEL_NAME);
+    } catch (err) {
+      // Optional dependency missing or model download unavailable; fall back to a lightweight deterministic vector.
+      console.warn('[CampaignDNA] Embedder unavailable; using fallback vectors:', err);
+      this.embedder = null;
     }
   }
 
@@ -31,8 +54,12 @@ export class CampaignDNAEngine {
     
     // Combine input name with all discovered signal descriptions to create a "Context String"
     const context = `${input} ${signals.join(' ')}`;
+
+    if (!this.embedder) {
+      return this.fallbackVector(context);
+    }
+
     const output = await this.embedder(context, { pooling: 'mean', normalize: true });
-    
     return Array.from(output.data);
   }
 
@@ -56,14 +83,40 @@ export class CampaignDNAEngine {
   }
 
   private static cosineSimilarity(vecA: number[], vecB: number[]): number {
+    if (vecA.length === 0 || vecB.length === 0) return 0;
+    const len = Math.min(vecA.length, vecB.length);
     let dotProduct = 0;
     let normA = 0;
     let normB = 0;
-    for (let i = 0; i < vecA.length; i++) {
-      dotProduct += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
+    for (let i = 0; i < len; i++) {
+      const a = vecA[i];
+      const b = vecB[i];
+      dotProduct += a * b;
+      normA += a * a;
+      normB += b * b;
     }
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    const denom = Math.sqrt(normA) * Math.sqrt(normB);
+    return denom > 0 ? dotProduct / denom : 0;
+  }
+
+  private static fallbackVector(text: string, size: number = 64): number[] {
+    const vec = new Array<number>(size).fill(0);
+    const lowered = text.toLowerCase();
+
+    for (let i = 0; i < lowered.length; i++) {
+      const code = lowered.charCodeAt(i);
+      const idx = code % size;
+      vec[idx] += 1;
+    }
+
+    // Normalize (unit length) to keep cosine similarity stable
+    let norm = 0;
+    for (const x of vec) norm += x * x;
+    norm = Math.sqrt(norm);
+    if (norm > 0) {
+      for (let i = 0; i < vec.length; i++) vec[i] = vec[i] / norm;
+    }
+
+    return vec;
   }
 }

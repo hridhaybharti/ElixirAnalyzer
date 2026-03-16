@@ -5,6 +5,7 @@
 
 import { isIP as netIsIP } from "net";
 import { secretsManager } from "../utils/secrets";
+import { safeFetchJson as fetchJson } from "../utils/http";
 
 export interface ThreatIntelReport {
   source: string;
@@ -75,7 +76,7 @@ export interface AbuseIPDBReport {
 
 export interface IPLocation {
   ip: string;
-  source: "ipapi";
+  source: string;
   city?: string;
   region?: string;
   country?: string;
@@ -137,31 +138,7 @@ function env(name: string): string | undefined {
   return v && v.trim() ? v.trim() : undefined;
 }
 
-async function fetchJson(
-  url: string,
-  init?: RequestInit,
-  timeoutMs = 8000,
-): Promise<{ ok: true; status: number; json: any } | { ok: false; status: number; error: string }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...init, signal: controller.signal });
-    const status = res.status;
-    const text = await res.text();
-    if (!res.ok) {
-      return { ok: false, status, error: text || `HTTP ${status}` };
-    }
-    try {
-      return { ok: true, status, json: text ? JSON.parse(text) : null };
-    } catch (e: any) {
-      return { ok: false, status, error: `Invalid JSON: ${String(e?.message || e)}` };
-    }
-  } catch (e: any) {
-    return { ok: false, status: 0, error: String(e?.message || e) };
-  } finally {
-    clearTimeout(timer);
-  }
-}
+// fetchJson now provided by sandboxed helper
 
 function toIsoFromUnixSeconds(value: unknown): string | undefined {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
@@ -335,29 +312,124 @@ export async function lookupIPLocation(ip: string): Promise<IPLocation | null> {
   const clean = ip.trim();
   if (!netIsIP(clean)) return null;
 
-  // No key required. Rate-limited by provider; keep timeouts low.
-  const resp = await fetchJson(`https://ipapi.co/${encodeURIComponent(clean)}/json/`, undefined, 6000);
-  if (!resp.ok) return { ip: clean, source: "ipapi", error: resp.error };
+  // No key required. Some providers rate-limit aggressively, so we try a fallback chain.
+  const toResult = (args: {
+    source: string;
+    city?: unknown;
+    region?: unknown;
+    country?: unknown;
+    countryCode?: unknown;
+    latitude?: unknown;
+    longitude?: unknown;
+  }): IPLocation => {
+    const latitude = typeof args.latitude === "number" ? args.latitude : undefined;
+    const longitude = typeof args.longitude === "number" ? args.longitude : undefined;
 
-  const j = resp.json || {};
-  const latitude = typeof j.latitude === "number" ? j.latitude : undefined;
-  const longitude = typeof j.longitude === "number" ? j.longitude : undefined;
-
-  return {
-    ip: clean,
-    source: "ipapi",
-    city: typeof j.city === "string" ? j.city : undefined,
-    region: typeof j.region === "string" ? j.region : undefined,
-    country: typeof j.country_name === "string" ? j.country_name : undefined,
-    countryCode: typeof j.country_code === "string" ? j.country_code : undefined,
-    latitude,
-    longitude,
-    googleMapsUrl:
-      latitude !== undefined && longitude !== undefined
-        ? `https://www.google.com/maps?q=${latitude},${longitude}`
-        : undefined,
-    accuracy: "approximate",
+    return {
+      ip: clean,
+      source: args.source as any,
+      city: typeof args.city === "string" ? args.city : undefined,
+      region: typeof args.region === "string" ? args.region : undefined,
+      country: typeof args.country === "string" ? args.country : undefined,
+      countryCode: typeof args.countryCode === "string" ? args.countryCode : undefined,
+      latitude,
+      longitude,
+      googleMapsUrl:
+        latitude !== undefined && longitude !== undefined
+          ? `https://www.google.com/maps?q=${latitude},${longitude}`
+          : undefined,
+      accuracy: "approximate",
+    };
   };
+
+  // 1) Primary: ipapi.co (fast, but can rate-limit)
+  let primaryRateLimitedMessage: string | null = null;
+  const primary = await fetchJson(`https://ipapi.co/${encodeURIComponent(clean)}/json/`, undefined, 6000);
+  if (primary.ok) {
+    const j = primary.json || {};
+    const isProviderError = j?.error === true;
+    const reason = typeof j?.reason === "string" ? j.reason : "";
+
+    if (!isProviderError) {
+      return toResult({
+        source: "ipapi.co",
+        city: j.city,
+        region: j.region,
+        country: j.country_name,
+        countryCode: j.country_code,
+        latitude: j.latitude,
+        longitude: j.longitude,
+      });
+    }
+
+    // Rate limited: fall through to the open alternative vendor below.
+    if (!reason.toLowerCase().includes("ratelimited")) {
+      const msg = typeof j?.message === "string" ? j.message : "Lookup failed";
+      return { ip: clean, source: "ipapi.co", error: msg };
+    }
+
+    primaryRateLimitedMessage = typeof j?.message === "string" ? j.message : "Rate limited";
+  } else {
+    // Network/HTTP failure: fall through to fallback.
+  }
+
+  // 2) Fallback: ipwho.is (HTTPS, no key, generous free tier)
+  const alt = await fetchJson(`https://ipwho.is/${encodeURIComponent(clean)}`, undefined, 6000);
+
+  if (alt.ok) {
+    const j2 = alt.json || {};
+    if (j2?.success === true) {
+      return toResult({
+        source: "ipwho.is",
+        city: j2.city,
+        region: j2.region,
+        country: j2.country,
+        countryCode: j2.country_code,
+        latitude: j2.latitude,
+        longitude: j2.longitude,
+      });
+    }
+
+    // ipwho.is returns success=false with a message
+    const msg =
+      typeof j2?.message === "string"
+        ? j2.message
+        : typeof j2?.error === "string"
+          ? j2.error
+          : "Lookup failed";
+    return { ip: clean, source: "ipwho.is", error: msg };
+  }
+
+  // 3) Last resort: ip-api.com (no key; http for the free tier). Some environments block plain HTTP.
+  const fallback = await fetchJson(
+    `http://ip-api.com/json/${encodeURIComponent(clean)}?fields=status,message,country,countryCode,regionName,city,lat,lon`,
+    undefined,
+    6000,
+  );
+
+  if (!fallback.ok) {
+    const prefix = primaryRateLimitedMessage ? `Primary geolocation provider rate-limited (${primaryRateLimitedMessage}). ` : "";
+    return { ip: clean, source: "ip-api.com", error: `${prefix}Fallback providers unavailable (${fallback.error}).` };
+  }
+
+  const j3 = fallback.json || {};
+  if (j3.status !== "success") {
+    return {
+      ip: clean,
+      source: "ip-api.com",
+      error: typeof j3.message === "string" ? j3.message : "Lookup failed",
+    };
+  }
+
+  return toResult({
+    source: "ip-api.com",
+    city: j3.city,
+    region: j3.regionName,
+    country: j3.country,
+    countryCode: j3.countryCode,
+    latitude: j3.lat,
+    longitude: j3.lon,
+  });
 }
 
 /**
@@ -449,7 +521,7 @@ export async function lookupWhoisData(domain: string): Promise<WhoisData | null>
   // Extract domain from URL if needed
   let cleanDomain = domain;
   try {
-    const url = new URL("http://" + domain);
+    const url = new URL(domain.includes("://") ? domain : `http://${domain}`);
     cleanDomain = url.hostname;
   } catch {
     // Already a domain
@@ -592,7 +664,7 @@ export async function checkURLReputation(url: string): Promise<ThreatIntelReport
   // Extract domain
   let domain = url;
   try {
-    const urlObj = new URL("http://" + url);
+    const urlObj = new URL(url.includes("://") ? url : `http://${url}`);
     domain = urlObj.hostname;
   } catch {
     // Continue with url as-is

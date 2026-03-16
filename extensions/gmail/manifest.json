@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Elixir Email Analyzer",
+  "version": "0.1.0",
+  "description": "Analyze suspicious emails with Elixir Analyzer from Gmail.",
+  "permissions": ["storage", "scripting", "identity"],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "https://www.googleapis.com/*"
+  ],
+  "action": {
+    "default_title": "Analyze in Elixir"
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "oauth2": {
+    "client_id": "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly"
+    ]
+  }
+}

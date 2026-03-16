@@ -1,0 +1,13 @@
+From: Suspicious Sender <spoof@totally-legit.zip>
+To: Victim <victim@example.com>
+Subject: Urgent: Reset Password Now
+Date: Mon, 15 Mar 2026 12:05:00 +0000
+Message-ID: <test-suspicious-1@totally-legit.zip>
+Return-Path: <mailer@totally-legit.zip>
+Received: from unknown (unknown [198.51.100.89])
+	by mx.example.net with ESMTP id def456
+	for <victim@example.com>; Mon, 15 Mar 2026 12:05:00 +0000
+
+URGENT: Reset your password now at http://google.com.attacker.tld/login
+
+Also check this: http://tinyurl.com/2fcpre6

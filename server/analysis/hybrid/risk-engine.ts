@@ -1,5 +1,5 @@
 import { FeatureExtractor } from './feature-extractor';
-import { HeuristicEngine } from './heuristic-engine';
+import { HeuristicEngine, type HeuristicSignal } from './heuristic-engine';
 import { AIInferenceService } from './ai-inference';
 import { ThreatIntelService } from './threat-intel';
 import { SignalAggregator, FinalAnalysisReport } from './signal-aggregator';
@@ -15,9 +15,16 @@ import { PortIntelligenceService } from '../protocols/port-intelligence';
 import { PDNSHistoryService } from '../pdns/pdns-history';
 import { CTLogService } from '../ctlogs/ct-log-scanner';
 import dns from 'dns/promises';
+import { GraphService } from '../../graph/graph';
+
+export type HybridAnalysisReport = FinalAnalysisReport & {
+  dnaMatch?: any;
+  visualCapture?: any;
+  heuristicsList?: HeuristicSignal[];
+};
 
 export class HybridRiskEngine {
-  static async analyze(type: "ip" | "domain" | "url", input: string): Promise<FinalAnalysisReport & { dnaMatch?: any }> {
+  static async analyze(type: "ip" | "domain" | "url", input: string): Promise<HybridAnalysisReport> {
     console.log(`[HybridRiskEngine] Initiating full spectrum analysis for ${type}: ${input}`);
     
     // 1. Feature Extraction (DNA markers)
@@ -32,6 +39,17 @@ export class HybridRiskEngine {
         if (addrs.length > 0) targetIp = addrs[0];
       } catch { /* ignore resolution errors */ }
     }
+    // Add graph edges: url/domain relations
+    try {
+      if (type === 'url') {
+        GraphService.addEdge(`url:${input}`, `domain:${hostname}`, 'resolves_to');
+      }
+      if (type !== 'ip') {
+        if (targetIp) GraphService.addEdge(`domain:${hostname}`, `ip:${targetIp}`, 'dns_a');
+      } else {
+        GraphService.addEdge(`ip:${input}`, `ip:${input}`, 'self');
+      }
+    } catch {}
 
     // 2. Parallel Signal Gathering (The Blitz)
     const [heuristics, aiSignals, osintSignals, dnsSignal, ipNeighborSignal, tlsSignal, driftSignal, asnSignal, portSignal, pdnsSignal, ctSignal] = await Promise.all([
@@ -97,26 +115,32 @@ export class HybridRiskEngine {
       }));
     }
 
-    // 🚀 Strike 2: Brand Vision AI (Visual Verification)
-    const captureId = Buffer.from(input).toString('hex').substring(0, 12);
-    const visualCapture = await visualEngine.captureSafeScreenshot(input, captureId);
-    
-    if (visualCapture.success && visualCapture.path) {
-      const screenshotRelativePath = `server/data/screenshots/${captureId}.jpg`;
-      const visionSignal = await BrandVisionService.analyze(screenshotRelativePath, hostname);
+	    // 🚀 Strike 2: Brand Vision AI (Visual Verification)
+	    const captureId = Buffer.from(input).toString('hex').substring(0, 12);
+	    const visualCapture = await visualEngine.captureSafeScreenshot(input, captureId);
+	    const visualCaptureResult = visualCapture;
+	    
+	    if (visualCapture.success && visualCapture.path) {
+	      const screenshotRelativePath = `server/data/screenshots/${captureId}.jpg`;
+	      const visionSignal = await BrandVisionService.analyze(screenshotRelativePath, hostname);
       
-      if (visionSignal) {
-        visionSignal.heuristics.forEach(h => heuristics.push({
-          name: h.name,
-          score: h.score,
-          description: h.description,
-          severity: 'critical'
-        }));
-      }
+	      if (visionSignal) {
+	        visionSignal.heuristics.forEach(h => heuristics.push({
+	          name: h.name,
+	          score: h.score,
+	          description: h.description,
+	          severity: 'critical'
+	        }));
+	      }
 
-      const standardVisual = visualEngine.getVisualHeuristics(visualCapture);
-      heuristics.push(...standardVisual.map(h => ({ ...h, severity: h.status as any })));
-    }
+	      const standardVisual = visualEngine.getVisualHeuristics(visualCapture);
+	      heuristics.push(...standardVisual.map(h => ({
+	        name: h.name,
+	        score: h.scoreImpact,
+	        description: h.description,
+	        severity: (h.status === 'fail' ? 'critical' : h.status === 'warn' ? 'high' : 'low') as HeuristicSignal['severity']
+	      })));
+	    }
 
     // 4. Signal Aggregation & Scoring
     const report = SignalAggregator.aggregate(heuristics, aiSignals, osintSignals);
@@ -133,9 +157,9 @@ export class HybridRiskEngine {
     CampaignDNAEngine.storeFingerprint(Date.now().toString(), dnaVector, {
       input, finalRiskScore: report.finalRiskScore, timestamp: Date.now()
     });
-
-    console.log(`[HybridRiskEngine] Analysis complete. Verdict: ${report.classification} (${report.finalRiskScore})`);
-    
-    return report;
-  }
-}
+	
+	    console.log(`[HybridRiskEngine] Analysis complete. Verdict: ${report.classification} (${report.finalRiskScore})`);
+	    
+      return { ...report, visualCapture: visualCaptureResult, heuristicsList: heuristics };
+	  }
+	}

@@ -1,0 +1,15 @@
+From: Example Sender <sender@example.com>
+To: User <user@example.com>
+Subject: Benign Test
+Date: Mon, 15 Mar 2026 12:00:00 +0000
+Message-ID: <test-benign-1@example.com>
+Return-Path: <sender@example.com>
+Received: from mail.example.com (mail.example.com [203.0.113.10])
+	by mx.example.net with ESMTP id abc123
+	for <user@example.com>; Mon, 15 Mar 2026 12:00:00 +0000
+
+Hello,
+
+This is a benign test email.
+
+Visit https://example.com for more info.

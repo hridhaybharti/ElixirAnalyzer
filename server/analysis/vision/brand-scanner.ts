@@ -1,4 +1,3 @@
-import { pipeline } from '@xenova/transformers';
 import fs from 'fs';
 import path from 'path';
 
@@ -19,6 +18,8 @@ export interface BrandVisionSignal {
 export class BrandVisionService {
   private static classifier: any = null;
   private static MODEL_NAME = 'Xenova/clip-vit-base-patch32';
+  private static pipelineFn: any = null;
+  private static pipelineLoadError: unknown = null;
   private static CANDIDATE_LABELS = [
     'a photo of a microsoft login page',
     'a photo of a paypal login page',
@@ -27,9 +28,26 @@ export class BrandVisionService {
     'a photo of a generic website'
   ];
 
+  private static async loadPipeline() {
+    if (this.pipelineFn) return this.pipelineFn;
+    if (this.pipelineLoadError) throw this.pipelineLoadError;
+
+    try {
+      const pkg = '@xenova/transformers';
+      const mod = (await import(pkg as any)) as any;
+      if (!mod?.pipeline) throw new Error(`Missing export 'pipeline' from ${pkg}`);
+      this.pipelineFn = mod.pipeline;
+      return this.pipelineFn;
+    } catch (err) {
+      this.pipelineLoadError = err;
+      throw err;
+    }
+  }
+
   private static async init() {
     if (!this.classifier) {
       console.log(`[BrandVision] Loading Vision Brain: ${this.MODEL_NAME}...`);
+      const pipeline = await this.loadPipeline();
       this.classifier = await pipeline('zero-shot-image-classification', this.MODEL_NAME);
     }
   }

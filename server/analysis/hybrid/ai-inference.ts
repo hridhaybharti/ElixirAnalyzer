@@ -1,5 +1,3 @@
-import { pipeline } from '@xenova/transformers';
-
 export interface AISignal {
   modelName: string;
   maliciousProbability: number;
@@ -9,6 +7,24 @@ export interface AISignal {
 export class AIInferenceService {
   private static classifier: any = null;
   private static MODEL_NAME = 'Xenova/distilbert-base-uncased-finetuned-phishing';
+  private static pipelineFn: any = null;
+  private static pipelineLoadError: unknown = null;
+
+  private static async loadPipeline() {
+    if (this.pipelineFn) return this.pipelineFn;
+    if (this.pipelineLoadError) throw this.pipelineLoadError;
+
+    try {
+      const pkg = '@xenova/transformers';
+      const mod = (await import(pkg as any)) as any;
+      if (!mod?.pipeline) throw new Error(`Missing export 'pipeline' from ${pkg}`);
+      this.pipelineFn = mod.pipeline;
+      return this.pipelineFn;
+    } catch (err) {
+      this.pipelineLoadError = err;
+      throw err;
+    }
+  }
 
   /**
    * Initializes the local AI model (Transformers.js)
@@ -17,6 +33,7 @@ export class AIInferenceService {
   private static async init() {
     if (!this.classifier) {
       console.log(`[AIInference] Loading local brain: ${this.MODEL_NAME}...`);
+      const pipeline = await this.loadPipeline();
       this.classifier = await pipeline('text-classification', this.MODEL_NAME);
     }
   }

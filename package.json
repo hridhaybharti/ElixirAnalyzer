@@ -6,17 +6,20 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development npm run build:server && node dist/index.cjs",
     "dev:mem": "cross-env NODE_ENV=development USE_INMEMORY_STORAGE=1 PORT=5000 npm run build:server && node dist/index.cjs",
+    "dev:sandbox": "cross-env NODE_ENV=development USE_INMEMORY_STORAGE=1 SANDBOX=1 SANDBOX_ALLOW_HOSTS=www.virustotal.com,api.abuseipdb.com,ipapi.co,ipwho.is,ip-api.com PORT=5000 npm run build:server && node dist/index.cjs",
     "build": "npm run build:server",
     "build:all": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "esbuild server/prod.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.cjs --external:dotenv --external:express --external:pg --external:drizzle-orm --external:drizzle-orm/* --external:@replit/vite-plugin-dev-banner --external:@replit/vite-plugin-runtime-error-modal --external:@replit/vite-plugin-cartographer",
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "start:mem": "cross-env NODE_ENV=production USE_INMEMORY_STORAGE=1 PORT=5000 node dist/index.cjs",
+    "start:sandbox": "cross-env NODE_ENV=production USE_INMEMORY_STORAGE=1 SANDBOX=1 SANDBOX_ALLOW_HOSTS=www.virustotal.com,api.abuseipdb.com,ipapi.co,ipwho.is,ip-api.com PORT=5000 node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "prod:setup": "npm install && npx playwright install chromium",
     "prod:build": "npm run build:all && npm run db:push",
-    "prod:start": "cross-env NODE_ENV=production node dist/index.cjs"
+    "prod:start": "cross-env NODE_ENV=production node dist/index.cjs",
+    "test:dynamic": "node script/test-dynamic.js https://example.com"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -86,6 +89,8 @@
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.2.5",
     "vaul": "^1.1.2",
+    "mailparser": "^3.9.0",
+    "dompurify": "^3.0.9",
     "wouter": "^3.3.5",
     "ws": "^8.18.0",
     "zod": "^3.24.2",

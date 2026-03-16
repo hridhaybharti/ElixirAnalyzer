@@ -8,6 +8,7 @@ export function Header() {
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/history", label: "History", icon: History },
+    { href: "/email", label: "Email", icon: Search },
   ];
 
   const [open, setOpen] = useState(false);
