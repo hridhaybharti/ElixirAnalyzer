@@ -3,22 +3,22 @@ export async function initObservability() {
   try {
     // Dynamic import to avoid hard dependency when disabled
     const [{ NodeSDK }, { Resource }, { SEMRESATTRS_SERVICE_NAME }, otlp] = await Promise.all([
-      import('@opentelemetry/sdk-node'),
-      import('@opentelemetry/resources'),
-      import('@opentelemetry/semantic-conventions'),
-      import('@opentelemetry/exporter-trace-otlp-http').catch(async () => null as any),
+      import('@opentelemetry/sdk-node' as any),
+      import('@opentelemetry/resources' as any),
+      import('@opentelemetry/semantic-conventions' as any),
+      import('@opentelemetry/exporter-trace-otlp-http' as any).catch(async () => null as any),
     ]);
 
-    const exporter = otlp ? new otlp.OTLPTraceExporter({
+    const exporter = otlp ? new (otlp as any).OTLPTraceExporter({
       url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || undefined,
       headers: {},
     }) : undefined;
 
-    const resource = new Resource({
+    const resource = new (Resource as any)({
       [SEMRESATTRS_SERVICE_NAME]: process.env.OTEL_SERVICE_NAME || 'elixir-analyzer',
     });
 
-    const sdk = new NodeSDK({
+    const sdk = new (NodeSDK as any)({
       resource,
       traceExporter: exporter,
       // auto-instrumenters can be added here when installed

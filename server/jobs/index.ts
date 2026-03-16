@@ -51,7 +51,7 @@ async function createBullQueue() {
   if (!url) return null;
   try {
     // Dynamically import to avoid hard dependency
-    const { Queue, Worker, JobsOptions, QueueEvents } = await import('bullmq');
+    const { Queue, Worker, QueueEvents } = await import('bullmq' as any);
     const connection = { connection: { url } } as any;
     const queue = new Queue('analysis', connection);
     const events = new QueueEvents('analysis', connection);
@@ -64,7 +64,7 @@ async function createBullQueue() {
 
     return {
       async submit(type: InputType, input: string) {
-        const job = await queue.add('analyze', { type, input } as any, { removeOnComplete: 1000, removeOnFail: 1000 } as any as JobsOptions);
+        const job = await queue.add('analyze', { type, input } as any, { removeOnComplete: 1000, removeOnFail: 1000 } as any);
         return { id: job.id, status: 'queued', createdAt: Date.now() };
       },
       async get(id: string) {
